@@ -18,7 +18,7 @@ const (
 	repository = "https://github.com/howiepu/codex-5h-reset"
 )
 
-var version = "0.1.0"
+var version = "0.1.1"
 
 type config struct {
 	Enabled              bool       `yaml:"enabled" json:"enabled"`
