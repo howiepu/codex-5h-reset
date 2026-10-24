@@ -188,7 +188,13 @@ func (w *warmer) executeRun(cfg config, job *runJob) {
 		"auth_total": len(listed.Files), "codex_total": codex, "selected_count": len(auths), "skipped_disabled": disabled, "skipped_missing_id": missing, "reported_unavailable": unavailable, "reported_inactive": inactive,
 	})
 	if len(auths) == 0 {
-		runLog("warn", "warmup.no_credentials", "没有可执行的 Codex 账号，请检查 CPA 凭证", nil)
+		message := "没有可执行的 Codex 账号，请检查 CPA 凭证"
+		runLog("warn", "warmup.no_credentials", message, nil)
+		if strings.HasPrefix(job.progress.Source, "schedule:") {
+			job.err = errors.New(message)
+			runLog("error", "warmup.finished", message, nil)
+			return
+		}
 	}
 	w.mu.Lock()
 	job.progress.Total = len(auths)

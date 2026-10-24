@@ -157,3 +157,44 @@ func TestWebhookBasicAuthIsScopedRedactedAndNotRedirected(t *testing.T) {
 		}
 	}
 }
+
+func TestScheduledEmptyAccountsNotifiesOncePerChannel(t *testing.T) {
+	for name, files := range map[string]string{
+		"empty":    `{"files":[]}`,
+		"disabled": `{"files":[{"id":"a","provider":"codex","disabled":true},{"id":"other","provider":"gemini"}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			var notifications atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+				var body struct{ Body string }
+				if err := json.NewDecoder(r.Body).Decode(&body); err != nil || !strings.Contains(body.Body, "没有可执行的 Codex 账号") {
+					t.Error("通知应说明定时预热没有可执行账号")
+				}
+				notifications.Add(1)
+				rw.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+			w, cfg := testWarmer(t, func(method string, _, response any) error {
+				if method == "host.auth.list" {
+					return json.Unmarshal([]byte(files), response)
+				}
+				if method == "host.model.execute" {
+					t.Error("没有可执行账号时不得发送模型请求")
+				}
+				return nil
+			})
+			cfg.NotifyWebhookURL, cfg.NotifyBarkURL = server.URL+"/webhook", server.URL+"/bark"
+			w.Configure(cfg)
+			if _, err := w.Run("manual"); err != nil || notifications.Load() != 0 {
+				t.Fatal("手动空账号检查仍应只记录警告")
+			}
+			if results, err := w.Run("schedule:morning"); err == nil || len(results) != 0 || notifications.Load() != 2 {
+				t.Fatal("定时空账号应返回异常，每个渠道通知一次")
+			}
+			progress := w.Status().History.LastProgress
+			if progress.Total != 0 || progress.Failed != 0 || progress.Error == "" || progress.FinishedAt == nil {
+				t.Fatal("整轮应保存零账号异常，不应伪造账号失败数")
+			}
+		})
+	}
+}

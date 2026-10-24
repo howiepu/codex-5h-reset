@@ -99,7 +99,7 @@ CPA 或容器更新后能否保留这些文件，仍取决于历史目录是否�
 
 ## 可选异常通知
 
-`notify_webhook_url` 与 `notify_bark_url` 默认留空，均为关闭。配置后，仅在整轮存在失败或账号列表读取失败等异常时，每个渠道发送一条 JSON POST 摘要；正常轮次保持安静。Bark 地址使用含设备 key 的推送 URL，通用 Webhook 需能接收 JSON。摘要包含 `title`、`body`、`group`、`run_id` 和 `source`，不附账号 ID、凭证或原始错误。
+`notify_webhook_url` 与 `notify_bark_url` 默认留空，均为关闭。配置后，仅在整轮存在失败或账号列表读取失败等异常时，每个渠道发送一条 JSON POST 摘要；定时任务没有可执行 Codex 账号时同样记为整轮异常并通知，手动检查空账号仅记录警告。正常轮次保持安静。Bark 地址使用含设备 key 的推送 URL，通用 Webhook 需能接收 JSON。摘要包含 `title`、`body`、`group`、`run_id` 和 `source`，不附账号 ID、凭证或原始错误。
 
 每个渠道超时 5 秒，不跟随重定向，不自动重试。通知失败单独记录，不改变模型请求结果。通知地址可能含密钥，只保存在 CPA 插件配置中，不出现在状态、历史或日志中；请保护 CPA 配置文件，跨公网使用 HTTPS。当前配置页需 CPA 管理鉴权，读取的是宿主的配置接口。
 
