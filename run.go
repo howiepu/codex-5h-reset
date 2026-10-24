@@ -273,6 +273,23 @@ func (w *warmer) Accounts() ([]authEntry, error) {
 			accounts = append(accounts, a)
 		}
 	}
+	if len(accounts) > 0 {
+		var registered struct {
+			Credentials []authEntry `json:"credentials"`
+		}
+		// 模型列表只用于提示，读取失败或旧宿主不支持时仍可使用账号。
+		if err := w.host("host.auth.models", struct{}{}, &registered); err == nil {
+			byID := map[string][]string{}
+			for _, entry := range registered.Credentials {
+				if strings.EqualFold(strings.TrimSpace(entry.Provider), "codex") && entry.Models != nil {
+					byID[entry.ID] = entry.Models
+				}
+			}
+			for i := range accounts {
+				accounts[i].Models = byID[accounts[i].ID]
+			}
+		}
+	}
 	sort.Slice(accounts, func(i, j int) bool { return strings.ToLower(accounts[i].ID) < strings.ToLower(accounts[j].ID) })
 	return accounts, nil
 }

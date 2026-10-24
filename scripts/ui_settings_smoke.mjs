@@ -3,17 +3,19 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
+const models = html.slice(html.indexOf("function renderModelHint()"), html.indexOf("function renderAccounts()"));
 const functions = html.slice(html.indexOf("function updatePromptMode()"), html.indexOf("function markDirty()"));
 const submit = html.slice(html.indexOf('$("settings").addEventListener("submit"'), html.indexOf("async function startManual("));
 const nodes = new Map(), saved = [];
 let pending;
 const context = vm.createContext({
-  configuration: null, settingsDirty: false, base: "/plugin", URL,
+  configuration: null, settingsDirty: false, accounts: [], base: "/plugin", URL,
+  document: {createElement: tag => ({tagName: tag, value: ""})},
   $: id => {
     if (!nodes.has(id)) nodes.set(id, {
       value: "", checked: false, children: [], listeners: {},
       addEventListener(type, callback) { this.listeners[type] = callback; },
-      replaceChildren() { this.children = []; },
+      replaceChildren(...children) { this.children = children; },
     });
     return nodes.get(id);
   },
@@ -25,7 +27,7 @@ const context = vm.createContext({
     saved.push(JSON.parse(options.body));
   },
 });
-vm.runInContext(functions + submit, context);
+vm.runInContext(models + functions + submit, context);
 const original = {
   enabled: true, priority: 7, store: {repository: "test-source"},
   model: "test-model", prompt: "keep this fixed message", timezone: "Asia/Singapore",
@@ -58,4 +60,25 @@ assert.equal(nodes.get("webhookPassword").value, original.notify_webhook_passwor
 assert.throws(() => context.validateConfig({...original, notify_webhook_username: "user:name"}), /用户名不能包含冒号或换行/);
 assert.throws(() => context.validateConfig({...original, notify_webhook_username: ""}), /必须填写用户名/);
 assert.doesNotThrow(() => context.validateConfig({...original, notify_webhook_username: "", notify_webhook_password: ""}));
-console.log("管理页设置验证通过：随机算术题开关读写、固定内容保留、Webhook 认证保存和校验。");
+context.accounts = [
+  {id: "a", label: "账号 A", models: ["test-model", "shared"]},
+  {id: "b", label: "账号 B", models: []},
+  {id: "c", models: null},
+  {id: "disabled", disabled: true, models: ["disabled-model"]},
+];
+context.renderModelOptions();
+assert.deepEqual(nodes.get("modelOptions").children.map(option => option.value), ["shared", "test-model"]);
+assert.match(nodes.get("modelHint").textContent, /1 \/ 3.*1 个账号暂无模型列表.*未注册：账号 B/);
+nodes.get("model").value = "possible-alias";
+nodes.get("model").listeners.input();
+assert.match(nodes.get("modelHint").textContent, /0 \/ 3.*未注册：账号 A、账号 B.*模型别名及实际执行仍交给 CPA 判断/);
+assert.equal(nodes.get("model").value, "possible-alias", "提示和建议不能替换用户选择的模型");
+assert.doesNotThrow(() => context.validateConfig({...original, model: "possible-alias"}));
+context.accounts = [{id: "legacy"}];
+context.renderModelOptions();
+assert.match(nodes.get("modelHint").textContent, /CPA 暂未提供账号模型列表/);
+assert.equal(nodes.get("modelOptions").children.length, 0);
+context.accounts = [];
+context.renderModelOptions();
+assert.match(nodes.get("modelHint").textContent, /暂无可执行的 Codex 账号/);
+console.log("管理页设置验证通过：随机算术题、固定内容保留、Webhook 认证、账号模型提示与旧宿主兼容。");

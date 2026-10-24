@@ -21,12 +21,13 @@ var (
 type hostFunc func(method string, request, response any) error
 
 type authEntry struct {
-	ID          string `json:"id"`
-	Provider    string `json:"provider"`
-	Label       string `json:"label"`
-	Disabled    bool   `json:"disabled"`
-	Unavailable bool   `json:"unavailable"`
-	Status      string `json:"status"`
+	ID          string   `json:"id"`
+	Provider    string   `json:"provider"`
+	Label       string   `json:"label"`
+	Disabled    bool     `json:"disabled"`
+	Unavailable bool     `json:"unavailable"`
+	Status      string   `json:"status"`
+	Models      []string `json:"models"`
 }
 
 type modelRequest struct {

@@ -20,6 +20,45 @@ func waitRun(t *testing.T, job *runJob) {
 	}
 }
 
+func TestAccountsRegisteredModelsAreAdvisory(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		legacy bool
+	}{{"registered", false}, {"legacy_host", true}} {
+		t.Run(tc.name, func(t *testing.T) {
+			modelCalls := 0
+			w := newWarmer(func(method string, _, response any) error {
+				switch method {
+				case "host.auth.list":
+					return json.Unmarshal([]byte(`{"files":[{"id":"b","provider":"codex","disabled":true},{"id":"a","provider":"codex"},{"id":"c","provider":"codex","unavailable":true},{"id":"other","provider":"gemini"}]}`), response)
+				case "host.auth.models":
+					modelCalls++
+					if tc.legacy {
+						return errors.New("unsupported-private-host-error")
+					}
+					return json.Unmarshal([]byte(`{"credentials":[{"id":"a","provider":"codex","models":["model-z","model-a"]},{"id":"b","provider":"codex","models":[]},{"id":"c","provider":"gemini","models":["foreign-model"]},{"id":"missing","provider":"codex","models":["unlisted-model"]}]}`), response)
+				default:
+					t.Fatalf("读取注册信息不应执行模型或查询额度：%s", method)
+				}
+				return nil
+			})
+			accounts, err := w.Accounts()
+			if err != nil || len(accounts) != 3 || modelCalls != 1 || accounts[0].ID != "a" || accounts[1].ID != "b" || accounts[2].ID != "c" {
+				t.Fatalf("模型提示不能改变账号列表：%+v, %v", accounts, err)
+			}
+			if !tc.legacy && (strings.Join(accounts[0].Models, ",") != "model-z,model-a" || accounts[1].Models == nil || len(accounts[1].Models) != 0) {
+				t.Fatalf("应按账号 ID 匹配模型，并区分空列表和未读取：%+v", accounts)
+			}
+			if accounts[2].Models != nil {
+				t.Fatal("不能匹配其他提供方的模型")
+			}
+			if tc.legacy && (accounts[0].Models != nil || accounts[1].Models != nil) {
+				t.Fatal("旧宿主不支持模型列表时应保留未知状态")
+			}
+		})
+	}
+}
+
 func TestSelectedRunProgressStopAndDedup(t *testing.T) {
 	started, release := make(chan struct{}), make(chan struct{})
 	releaseOnce := sync.OnceFunc(func() { close(release) })

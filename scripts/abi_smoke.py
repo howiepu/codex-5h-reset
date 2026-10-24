@@ -51,6 +51,8 @@ class FakeCPA:
             request = json.loads(C.string_at(raw, length))
             if method == "host.auth.list":
                 result = {"files": [{"id": "b", "label": "模拟账号 B", "provider": "codex", "unavailable": True, "status": "cooldown"}, {"id": "a", "label": "模拟账号 A", "provider": "codex", "status": "active"}, {"id": "disabled", "label": "已停用模拟账号", "provider": "codex", "disabled": True}, {"id": "other", "provider": "gemini"}]}
+            elif method == "host.auth.models":
+                result = {"credentials": [{"id": "a", "provider": "codex", "models": ["gpt-5.6-luna", "gpt-6-luna"]}, {"id": "b", "provider": "codex", "models": ["gpt-6-luna"]}, {"id": "disabled", "provider": "codex", "models": []}]}
             elif method == "host.model.execute":
                 self.requests.append(request)
                 time.sleep(self.model_delay)
@@ -118,6 +120,11 @@ def main():
         code, html = cpa.management("GET", "/v0/resource/plugins/codex-5h-reset/status")
         assert code == 200 and b"<html" in html and b"ABI-smoke-only" not in html
         assert not cpa.requests, "注册插件时不得自动预热"
+        code, raw = cpa.management("GET", base + "/accounts")
+        accounts = json.loads(raw)["accounts"]
+        assert code == 200 and [a["id"] for a in accounts] == ["a", "b", "disabled"]
+        assert accounts[0]["models"] == ["gpt-5.6-luna", "gpt-6-luna"] and accounts[2]["models"] == []
+        assert "gpt-5.6-luna" not in accounts[1]["models"], "未注册模型的账号仍应保留并交给 CPA 执行"
         code, raw = cpa.management("POST", base + "/run")
         data = json.loads(raw)
         assert code == 200 and len(data["results"]) == 2, data
