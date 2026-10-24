@@ -37,6 +37,9 @@ config = {
     "schedules": [{"id": "早", "at": "05:00", "enabled": True}, {"id": "中", "at": "10:05", "enabled": True}, {"id": "晚", "at": "15:10", "enabled": True}],
     "max_log_entries": 200, "state_file": str(state),
     "history_retention_days": 30, "notify_webhook_url": "", "notify_bark_url": "",
+    "notify_webhook_method": "POST", "notify_webhook_format": "json",
+    "notify_webhook_headers": {"Authorization": "Bearer local-preview-only"},
+    "notify_webhook_body": '{\n  "body": "{{notification}}",\n  "format": "text"\n}',
 }
 
 
@@ -54,9 +57,20 @@ class Handler(BaseHTTPRequestHandler):
     def do_PUT(self):
         self.respond()
 
+    def do_PATCH(self):
+        self.respond()
+
+    def do_DELETE(self):
+        self.respond()
+
     def respond(self):
         global config
         parsed = urlsplit(self.path)
+        if parsed.path == "/mock/webhook":
+            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            self.send(204, b"")
+            print("本地模拟 Webhook 已接收测试消息；未向外部投递", flush=True)
+            return
         if parsed.path == "/narrow":
             theme = "dark" if parse_qs(parsed.query).get("theme") == ["dark"] else "light"
             html = f'<!doctype html><html lang="zh-CN" data-theme="{theme}"><meta charset="utf-8"><title>375px UI test</title><body style="margin:0;background:#eee"><iframe title="375px viewport" src="/v0/resource/plugins/codex-5h-reset/status" style="display:block;width:375px;max-width:100%;height:100vh;border:0"></iframe></body></html>'
@@ -91,10 +105,11 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
-configure()
 server = ThreadingHTTPServer(("127.0.0.1", args.port), Handler)
-print(f"UI 测试：http://127.0.0.1:{args.port}/v0/resource/plugins/codex-5h-reset/status", flush=True)
-print(f"窄屏测试：http://127.0.0.1:{args.port}/narrow；模拟密钥：test-management-key", flush=True)
+config["notify_webhook_url"] = f"http://127.0.0.1:{server.server_port}/mock/webhook"
+configure()
+print(f"UI 测试：http://127.0.0.1:{server.server_port}/v0/resource/plugins/codex-5h-reset/status", flush=True)
+print(f"窄屏测试：http://127.0.0.1:{server.server_port}/narrow；模拟密钥：test-management-key", flush=True)
 try:
     server.serve_forever()
 except KeyboardInterrupt:

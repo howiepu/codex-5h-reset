@@ -59,10 +59,14 @@
     .grow { min-width: 0; flex: 1 1 200px; }
     label { display: block; margin: 0 0 7px; font-size: 13px; font-weight: 500; }
     label.check { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 12px; font-weight: 400; }
-    input:not([type=checkbox]), textarea, select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--background); color: inherit; box-shadow: 0 1px 2px #00000005; }
-    input:not([type=checkbox]) { height: 36px; }
+    input:not([type=checkbox]):not([type=radio]), textarea, select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background-color: var(--background); color: inherit; box-shadow: 0 1px 2px #00000005; }
+    input:not([type=checkbox]):not([type=radio]) { height: 36px; }
     input[type=checkbox] { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); }
     textarea { min-height: 96px; resize: vertical; line-height: 1.6; }
+    input:disabled, textarea:disabled, select:disabled { color: var(--muted-foreground); background-color: var(--muted); cursor: not-allowed; }
+    select, #model { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 16px 16px; }
+    select { padding-right: 36px; }
+    #model::-webkit-calendar-picker-indicator { opacity: 0; width: 16px; padding: 0; margin: 0 0 0 8px; cursor: pointer; }
     small { font-size: 12px; }
     #notice { min-height: 40px; padding: 10px 0; font-size: 12px; color: var(--muted-foreground); white-space: pre-wrap; overflow-wrap: anywhere; }
     #modelHint { display: block; margin-top: 8px; overflow-wrap: anywhere; }
@@ -97,10 +101,35 @@
     dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
     fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
     fieldset:disabled { opacity: .55; }
-    .settings-section { padding: 20px; border-bottom: 1px solid var(--border); }
-    .settings-section > p { margin: 4px 0 20px; font-size: 12px; color: var(--muted-foreground); }
-    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
-    .field + .field, .grid + .field { margin-top: 20px; }
+    .settings-section { display: grid; gap: 20px; padding: 24px; border-bottom: 1px solid var(--border); }
+    .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .section-heading h2 { font-size: 15px; }
+    .section-heading > div { flex: 1; min-width: 0; }
+    .section-heading button { flex: none; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; align-items: start; }
+    .field { min-width: 0; }
+    .field > small { display: block; margin-top: 7px; line-height: 1.6; overflow-wrap: anywhere; }
+    .mode-switch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .mode-switch legend { padding: 0 0 8px; font-size: 13px; font-weight: 500; }
+    .mode-option { display: flex; align-items: center; gap: 10px; padding: 14px; margin: 0; border: 1px solid var(--border); border-radius: 7px; cursor: pointer; }
+    .mode-option:has(input:checked) { border-color: var(--primary); background: var(--muted); }
+    .mode-option:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .mode-option input[type=radio] { flex: none; width: 15px; height: 15px; margin: 0; accent-color: var(--primary); box-shadow: none; }
+    .message-preview { padding: 16px; border: 1px dashed var(--border); border-radius: 7px; background: var(--muted); }
+    .arithmetic-examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+    .arithmetic-examples code { padding: 5px 12px; border: 1px solid var(--border); border-radius: 5px; background: var(--background); font-size: 15px; }
+    .notification-channel { display: grid; gap: 18px; min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: 8px; }
+    .channel-heading h3 { margin: 0; font-size: 13px; font-weight: 600; }
+    .webhook-target { display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+    .code-input { min-height: 190px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+    .secret-input { position: relative; min-width: 0; }
+    .secret-input input { padding-right: 44px; }
+    .secret-input button { position: absolute; right: 4px; top: 4px; min-height: 28px; width: 30px; padding: 4px; border: 0; background: transparent; }
+    .template-help { color: var(--muted-foreground); font-size: 12px; overflow-wrap: anywhere; }
+    .template-help summary { width: fit-content; cursor: pointer; }
+    .template-help p { margin-top: 10px; line-height: 1.7; }
+    .notification-feedback { padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; overflow-wrap: anywhere; }
+    .notification-feedback.error { color: var(--danger); border-color: var(--danger); }
     .schedule { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto auto; gap: 12px; align-items: end; padding: 14px 0; border-bottom: 1px solid var(--border); }
     .schedule:first-child { padding-top: 0; }
     .schedule:last-child { border: 0; }
@@ -132,7 +161,14 @@
       .connection .chevron { margin-left: auto; }
       .page-heading { padding: 24px 0 16px; }
       h1 { font-size: 23px; }
-      .grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+      .settings-section { padding: 20px 16px; }
+      .grid, .mode-switch { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+      .notification-channel { padding: 16px; }
+      .webhook-target { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .webhook-url { grid-column: 1 / -1; }
+      .section-heading { flex-wrap: wrap; }
+      .form-actions { padding: 16px; }
+      .code-input { min-height: 165px; }
       .schedule { grid-template-columns: minmax(0, 1fr) 110px; }
       .schedule button { justify-self: end; }
       dl { grid-template-columns: 76px minmax(0, 1fr); gap: 14px; }
@@ -192,12 +228,45 @@
   </section>
   <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="tab-settings" hidden>
     <form id="settings" class="card" autocomplete="off"><fieldset id="settingsFields" disabled>
-      <div class="settings-section"><h2>消息内容</h2><p>发送给每个启用 Codex 账号的模型与消息。</p><div class="field"><label for="model">模型</label><input id="model" name="model" spellcheck="false" list="modelOptions" aria-describedby="modelHint" required><datalist id="modelOptions"></datalist><small id="modelHint" role="status" aria-live="polite">连接 CPA 后显示各账号注册的模型。</small></div><div class="field"><label class="check"><input id="randomArithmetic" name="random_arithmetic" type="checkbox" aria-describedby="randomArithmeticHint">使用随机算术题</label><small id="randomArithmeticHint">每次账号请求重新生成 1～9 的加减乘除题，除法保证整除；题目可能重复。启用后保留下方固定内容，发送时使用算术题。</small></div><div class="field"><label for="prompt">固定发送内容</label><textarea id="prompt" name="prompt" required></textarea></div></div>
-      <div class="settings-section"><h2>每日计划</h2><p>按所选时区执行，启动时不补发已经错过的时刻。</p><div class="field"><label for="timezone">时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div><div class="field"><div id="schedules"></div></div></div>
-      <div class="settings-section"><h2>运行历史</h2><p>在持久化目录内保存最近的执行结果和日志。</p><div class="grid"><div><label for="maxLogs">最近日志条数</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required></div></div></div>
-      <div class="settings-section"><h2>日志归档</h2><p>按 UTC 日期保存完整事件；可在运行日志中选择日期查看。</p><div class="field"><label for="retentionDays">归档保留天数</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
-      <div class="settings-section"><h2>异常通知</h2><p>默认关闭。每轮失败或定时任务无可用账号时，每个已配置渠道只发送一条汇总；不会重试模型请求。</p><div class="field"><label for="webhookURL">Webhook 地址（可选）</label><input id="webhookURL" name="notify_webhook_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><div class="grid"><div class="field"><label for="webhookUsername">Webhook 用户名（可选，Basic Auth）</label><input id="webhookUsername" name="notify_webhook_username" autocomplete="off" placeholder="例如 Apprise 的登录账号"></div><div class="field"><label for="webhookPassword">Webhook 密码（可选）</label><input id="webhookPassword" name="notify_webhook_password" type="password" autocomplete="new-password"></div></div><small>需要账号密码认证的接收端填写；两项留空关闭认证，密码中的空格会保留。</small><div class="field"><label for="barkURL">Bark 推送地址（可选，含设备 key）</label><input id="barkURL" name="notify_bark_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><small>通知地址和认证信息仅保存于 CPA 插件配置，不写入日志或历史文件。</small><div class="row"><button id="testNotification" type="button" aria-describedby="notificationTestHint">测试通知</button><small id="notificationTestHint">使用当前填写的配置，每个渠道发送一条测试消息，无需先保存。</small></div><p id="notificationTestResult" class="muted" role="status" aria-live="polite"></p></div>
-      <div class="form-actions"><small id="saveHint">配置需点击保存后生效。</small><button id="add" type="button">添加时刻</button><button id="save" class="primary" type="submit">保存配置</button></div>
+      <section class="settings-section" aria-labelledby="messageHeading">
+        <div class="section-heading"><div><h2 id="messageHeading">消息内容</h2></div></div>
+        <div class="field"><label for="model">预热模型</label><input id="model" name="model" spellcheck="false" list="modelOptions" aria-describedby="modelHint" required><datalist id="modelOptions"></datalist><small id="modelHint" role="status" aria-live="polite">连接 CPA 后显示各账号注册的模型。</small></div>
+        <fieldset class="mode-switch"><legend>发送方式</legend>
+          <label class="mode-option"><input id="fixedPrompt" name="message_mode" type="radio" value="fixed" checked><strong>固定消息</strong></label>
+          <label class="mode-option"><input id="randomArithmetic" name="message_mode" type="radio" value="random"><strong>随机算术题</strong></label>
+        </fieldset>
+        <div id="fixedPromptFields" class="field"><label for="prompt">固定消息内容</label><textarea id="prompt" name="prompt" required></textarea></div>
+        <div id="randomPromptPreview" class="message-preview" hidden><strong>随机题目示例</strong><div class="arithmetic-examples" aria-label="算术题示例" translate="no"><code>3 + 5</code><code>8 / 2</code><code>7 * 4</code></div></div>
+      </section>
+      <section id="dailyPlan" class="settings-section" aria-labelledby="scheduleHeading">
+        <div class="section-heading"><div><h2 id="scheduleHeading">每日计划</h2></div><button id="add" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>添加时刻</button></div>
+        <div class="field"><label for="timezone">执行时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div>
+        <div id="schedules"></div>
+      </section>
+      <section class="settings-section" aria-labelledby="historyHeading">
+        <div class="section-heading"><div><h2 id="historyHeading">历史与归档</h2></div></div>
+        <div class="grid"><div class="field"><label for="maxLogs">最近日志（条）</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div class="field"><label for="retentionDays">归档保留（天）</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
+        <div class="field"><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required><small>使用 CPA 持久化目录，升级后继续保留记录。</small></div>
+      </section>
+      <section class="settings-section" aria-labelledby="notificationHeading">
+        <div class="section-heading"><div><h2 id="notificationHeading">异常通知</h2></div><button id="testNotification" type="button" title="测试当前填写的配置"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7zM22 2 11 13"/></svg>测试通知</button></div>
+        <div class="notification-channel" aria-labelledby="webhookHeading">
+          <div class="channel-heading"><h3 id="webhookHeading">自定义 Webhook</h3></div>
+          <div class="webhook-target">
+            <div class="field webhook-url"><label for="webhookURL">Webhook URL</label><div class="secret-input"><input id="webhookURL" name="notify_webhook_url" type="password" autocomplete="off" spellcheck="false" placeholder="留空关闭…"><button id="webhookURLToggle" type="button" aria-label="显示 Webhook 地址" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+            <div class="field"><label for="webhookMethod">请求方法</label><select id="webhookMethod" name="notify_webhook_method"><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>GET</option></select></div>
+            <div class="field"><label for="webhookFormat">Body 格式</label><select id="webhookFormat" name="notify_webhook_format"><option value="json">JSON</option><option value="form">Form · 表单</option><option value="text">Text · 纯文本</option></select></div>
+          </div>
+          <div class="grid">
+            <div class="field"><label for="webhookHeaders">请求头 · JSON</label><textarea id="webhookHeaders" name="notify_webhook_headers" class="code-input" rows="7" autocomplete="off" spellcheck="false" aria-describedby="webhookHeadersHint" placeholder='{"Authorization": "Basic …"}'></textarea><small id="webhookHeadersHint">认证信息填写在 Authorization 中。</small></div>
+            <div class="field"><label for="webhookBody">请求体模板</label><textarea id="webhookBody" name="notify_webhook_body" class="code-input" rows="7" autocomplete="off" spellcheck="false" aria-describedby="webhookBodyHint" placeholder='{"body": "{{notification}}", "format": "text"}'></textarea><small id="webhookBodyHint">留空使用默认通知内容。</small></div>
+          </div>
+          <details class="template-help"><summary>模板变量</summary><p><code translate="no">{{notification}}</code> · <code translate="no">{{title}}</code> · <code translate="no">{{run_id}}</code> · <code translate="no">{{source}}</code> · <code translate="no">{{group}}</code></p><p>JSON 中的变量放在字符串引号内。Content-Type 随 Body 格式自动设置，可用请求头覆盖。</p></details>
+        </div>
+        <div class="notification-channel"><div class="channel-heading"><h3>Bark</h3></div><div class="field"><label for="barkURL">推送地址</label><div class="secret-input"><input id="barkURL" name="notify_bark_url" type="password" autocomplete="off" spellcheck="false" placeholder="留空关闭…"><button id="barkURLToggle" type="button" aria-label="显示 Bark 地址" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div></div>
+        <p id="notificationTestResult" class="notification-feedback" role="status" aria-live="polite" hidden></p>
+      </section>
+      <div class="form-actions"><small id="saveHint">未连接</small><button id="save" class="primary" type="submit">保存配置</button></div>
     </fieldset></form>
   </section>
   <footer>HTTP 2xx 代表请求成功，不额外验证额度窗口。启用或停用插件请在 CPA 插件列表中操作。</footer>
@@ -214,7 +283,7 @@ const views = {
   logs: ["运行日志", "查看每次触发和账号请求的记录，最新事件显示在前。"],
   status: ["运行状态", "查看当前执行状态与按时区安排的每日计划。"],
   results: ["账号结果", "选择手动预热的账号，查看各账号的执行进度与结果。"],
-  settings: ["预热设置", "管理模型、发送内容、每日计划、历史与异常通知。"]
+  settings: ["预热设置", ""]
 };
 const eventNames = {"configuration.updated": "配置加载", "schedule.planned": "计划安排", "schedule.triggered": "定时触发", "schedule.skipped": "计划跳过", "warmup.started": "开始预热", "warmup.selection": "账号选择", "warmup.no_credentials": "无可用账号", "warmup.credential_started": "账号开始", "warmup.credential": "账号结果", "warmup.finished": "本轮结束", "notification.sent": "通知已发送", "notification.failed": "通知失败"};
 const fieldNames = {run_id: "轮次 ID", source: "触发来源", auth_id: "账号 ID", label: "账号名称", model: "模型", status_code: "HTTP 状态", success: "请求成功", duration_ms: "耗时（ms）", error_kind: "错误分类", auth_total: "凭证总数", codex_total: "Codex 账号数", selected_count: "本轮选择数", skipped_disabled: "跳过禁用数", skipped_missing_id: "跳过缺少 ID 数", reported_unavailable: "列表中 CPA 标记不可用数（可选，交 CPA 判断）", reported_inactive: "列表中 CPA 非 active 数（可选，交 CPA 判断）", credential_count: "本轮账号数", success_count: "成功数", failure_count: "失败数", skipped_count: "未发送数", schedule_id: "日程", scheduled_at: "计划时间", channel: "通知渠道"};
@@ -224,7 +293,7 @@ function showView(view) {
     if (button.dataset.view === view) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   }
-  $("viewTitle").textContent = views[view][0]; $("viewDescription").textContent = views[view][1];
+  $("viewTitle").textContent = views[view][0]; $("viewDescription").textContent = views[view][1]; $("viewDescription").hidden = !views[view][1];
 }
 for (const button of document.querySelectorAll("[data-view]")) button.addEventListener("click", () => showView(button.dataset.view));
 try {
@@ -412,33 +481,83 @@ function addSchedule(schedule = {id: "", at: "05:00", enabled: true}) {
 }
 function updatePromptMode() {
   const random = $("randomArithmetic").checked;
+  $("fixedPrompt").checked = !random;
   $("prompt").disabled = random; $("prompt").required = !random;
+  $("fixedPromptFields").hidden = random; $("randomPromptPreview").hidden = !random;
 }
 $("randomArithmetic").addEventListener("change", updatePromptMode);
+$("fixedPrompt").addEventListener("change", () => { $("randomArithmetic").checked = false; updatePromptMode(); });
+function defaultWebhookBody(format) {
+  if (format === "text") return "{{notification}}";
+  const body = format === "form" ? {body: "{{notification}}", format: "text"} : {title: "{{title}}", body: "{{notification}}", group: "{{group}}", run_id: "{{run_id}}", source: "{{source}}"};
+  return JSON.stringify(body, null, 2);
+}
+function updateWebhookMode() {
+  const get = $("webhookMethod").value === "GET", format = $("webhookFormat").value;
+  $("webhookFormat").disabled = get; $("webhookBody").disabled = get;
+  $("webhookBodyHint").textContent = get ? "GET 不发送请求体。" : format === "form" ? "JSON 键值对，自动编码为表单。" : "留空使用默认通知内容。";
+  $("webhookBody").placeholder = defaultWebhookBody(format);
+}
+$("webhookMethod").addEventListener("change", updateWebhookMode);
+$("webhookFormat").addEventListener("change", updateWebhookMode);
+for (const id of ["webhookURL", "barkURL"]) {
+  $(id + "Toggle").addEventListener("click", () => {
+    const visible = $(id).type === "password";
+    $(id).type = visible ? "text" : "password";
+    $(id + "Toggle").setAttribute("aria-pressed", String(visible));
+    $(id + "Toggle").setAttribute("aria-label", (visible ? "隐藏 " : "显示 ") + (id === "webhookURL" ? "Webhook" : "Bark") + " 地址");
+  });
+}
 function fillConfig(cfg, fallback) {
   configuration = cfg;
   if (settingsDirty) return;
   const values = {...fallback, ...cfg};
+  $("saveHint").textContent = "已保存";
   for (const name of ["model", "prompt", "timezone"]) $(name).value = values[name];
   renderModelHint();
   $("randomArithmetic").checked = values.random_arithmetic === true; updatePromptMode();
   $("maxLogs").value = values.max_log_entries; $("stateFile").value = values.state_file;
   $("retentionDays").value = values.history_retention_days ?? 30;
   $("webhookURL").value = values.notify_webhook_url || ""; $("barkURL").value = values.notify_bark_url || "";
-  $("webhookUsername").value = values.notify_webhook_username || ""; $("webhookPassword").value = values.notify_webhook_password || "";
+  $("webhookMethod").value = values.notify_webhook_method || "POST";
+  $("webhookFormat").value = values.notify_webhook_format || "json";
+  const headers = {...(values.notify_webhook_headers || {})};
+  if (values.notify_webhook_username?.trim() && !Object.keys(headers).some(name => name.toLowerCase() === "authorization")) {
+    const encoded = new TextEncoder().encode(values.notify_webhook_username.trim() + ":" + (values.notify_webhook_password || ""));
+    headers.Authorization = "Basic " + btoa(Array.from(encoded, byte => String.fromCharCode(byte)).join(""));
+  }
+  $("webhookHeaders").value = JSON.stringify(headers, null, 2);
+  $("webhookBody").value = values.notify_webhook_body ?? defaultWebhookBody($("webhookFormat").value);
+  updateWebhookMode();
   $("schedules").replaceChildren(); (values.schedules || []).forEach(addSchedule);
 }
 function readNotificationConfig() {
-  return {notify_webhook_url: $("webhookURL").value.trim(), notify_webhook_username: $("webhookUsername").value.trim(), notify_webhook_password: $("webhookPassword").value, notify_bark_url: $("barkURL").value.trim()};
+  let headers;
+  try { headers = JSON.parse($("webhookHeaders").value.trim() || "{}"); } catch (_) { throw new Error("请求头必须是有效的 JSON 对象"); }
+  return {notify_webhook_url: $("webhookURL").value.trim(), notify_webhook_method: $("webhookMethod").value, notify_webhook_format: $("webhookFormat").value, notify_webhook_headers: headers, notify_webhook_body: $("webhookBody").value, notify_bark_url: $("barkURL").value.trim()};
 }
 function validateNotificationConfig(cfg) {
-  if (/[:\r\n]/.test(cfg.notify_webhook_username || "")) throw new Error("Webhook 用户名不能包含冒号或换行");
-  if (cfg.notify_webhook_password && !cfg.notify_webhook_username) throw new Error("Webhook 配置密码时必须填写用户名");
   for (const value of [cfg.notify_webhook_url, cfg.notify_bark_url]) {
     if (!value) continue;
     let url;
     try { url = new URL(value); } catch (_) { throw new Error("通知地址必须是有效的 HTTP(S) URL"); }
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash) throw new Error("通知地址不能含用户名密码或片段，且必须使用 HTTP(S)");
+  }
+  if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(cfg.notify_webhook_method || "POST")) throw new Error("请选择有效的 Webhook 请求方法");
+  const format = cfg.notify_webhook_format || "json", headers = cfg.notify_webhook_headers === undefined ? {} : cfg.notify_webhook_headers;
+  if (!["json", "form", "text"].includes(format)) throw new Error("请选择有效的 Body 格式");
+  if (typeof headers !== "object" || headers === null || Array.isArray(headers) || Object.values(headers).some(value => typeof value !== "string")) throw new Error("请求头必须是字符串键值对组成的 JSON 对象");
+  const names = new Set();
+  for (const [name, value] of Object.entries(headers)) {
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || /[\x00-\x08\x0A-\x1F\x7F]/.test(value)) throw new Error("请求头的名称或值不合法");
+    if (["host", "content-length", "transfer-encoding"].includes(name.toLowerCase())) throw new Error("Host、Content-Length 和 Transfer-Encoding 由客户端管理");
+    if (names.has(name.toLowerCase())) throw new Error("请求头不能重复，名称不区分大小写");
+    names.add(name.toLowerCase());
+  }
+  if (cfg.notify_webhook_method !== "GET" && format !== "text" && cfg.notify_webhook_body) {
+    let body;
+    try { body = JSON.parse(cfg.notify_webhook_body); } catch (_) { throw new Error("请求体必须是有效 JSON，变量需要放在字符串引号内"); }
+    if (format === "form" && (!body || typeof body !== "object" || Array.isArray(body) || Object.values(body).some(value => typeof value !== "string"))) throw new Error("表单请求体必须是值均为字符串的 JSON 对象");
   }
 }
 function validateConfig(cfg) {
@@ -457,7 +576,7 @@ function validateConfig(cfg) {
     if (schedule.enabled) times.add(schedule.at);
   }
 }
-function markDirty() { settingsDirty = true; $("saveHint").textContent = "有未保存的更改"; }
+function markDirty() { settingsDirty = true; $("saveHint").textContent = "未保存"; }
 $("settings").addEventListener("input", markDirty); $("settings").addEventListener("change", markDirty);
 function schedulePoll(delay = currentStatus?.running ? 1000 : 15000) {
   clearTimeout(pollTimer);
@@ -507,22 +626,24 @@ $("settings").addEventListener("submit", event => {
   action($("save"), "正在保存…", async () => {
     if (!configuration) throw new Error("请先读取配置");
     const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), ...readNotificationConfig()};
+    delete cfg.notify_webhook_username; delete cfg.notify_webhook_password;
     cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
     validateConfig(cfg);
     await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
-    configuration = cfg; settingsDirty = false; $("saveHint").textContent = "配置已保存。";
+    configuration = cfg; settingsDirty = false; $("saveHint").textContent = "已保存";
     await refreshStatus(); notice("配置已保存并应用。");
   });
 });
 $("testNotification").addEventListener("click", async () => {
   const button = $("testNotification"), output = $("notificationTestResult");
-  button.disabled = true; output.textContent = "正在发送测试通知…";
+  button.disabled = true; output.hidden = false; output.className = "notification-feedback"; output.textContent = "正在发送测试通知…";
   try {
     const cfg = readNotificationConfig(); validateNotificationConfig(cfg);
     if (!cfg.notify_webhook_url && !cfg.notify_bark_url) throw new Error("请先填写 Webhook 或 Bark 地址");
     const data = await request(base + "/test-notification", {method: "POST", body: JSON.stringify(cfg)});
+    output.className = "notification-feedback" + (data.results.some(r => !r.success) ? " error" : "");
     output.textContent = data.results.map(r => r.channel + "：" + (r.success ? "测试通知已发送" : "发送失败，" + r.error)).join("；");
-  } catch (error) { output.textContent = error.message; }
+  } catch (error) { output.className = "notification-feedback error"; output.textContent = error.message; }
   finally { button.disabled = false; }
 });
 async function startManual(authIDs) {

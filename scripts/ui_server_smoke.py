@@ -39,6 +39,11 @@ try:
 
     with urlopen(base + "/v0/resource/plugins/codex-5h-reset/status", timeout=2) as response:
         assert response.status == 200 and b"<html" in response.read()
+    _, config = call("/config")
+    _, tested = call("/test-notification", {key: value for key, value in config.items() if key.startswith("notify_")})
+    assert tested["results"] == [{"channel": "Webhook", "success": True}], tested
+    _, untouched = call("/status")
+    assert not untouched["history"].get("last_run"), "通知测试不能执行模型预热"
     request = Request(base + "/v0/management/plugins/codex-5h-reset/run", data=b"{}", headers={"Authorization": "Bearer test-management-key", "Content-Type": "application/json"})
     with urlopen(request, timeout=2) as response:
         results = json.load(response)["results"]
@@ -68,7 +73,7 @@ try:
     assert duplicate["duplicate"] and duplicate["progress"]["id"] == started["progress"]["id"]
     _, archived = call("/logs?day=" + datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     assert archived["logs"], archived
-    print("UI 服务验证通过：空闲连接、同步接口、异步进度、柔性停止、重复请求与日期归档。")
+    print("UI 服务验证通过：自定义通知本地投递、空闲连接、同步/异步接口、柔性停止、去重与日期归档。")
 finally:
     if idle:
         idle.close()
