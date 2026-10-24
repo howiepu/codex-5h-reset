@@ -4,6 +4,7 @@ import argparse
 import base64
 import ctypes as C
 import json
+import re
 import tempfile
 import time
 from pathlib import Path
@@ -137,6 +138,20 @@ def main():
         stored = json.loads(state.read_text())
         assert stored["schema_version"] == 1 and len(stored["last_results"]) == 1
         assert len(list((state.parent / "logs").glob("*.jsonl"))) == 1
+        random_config = config.replace("prompt: ABI-smoke-only", "prompt: ''") + "random_arithmetic: true\n"
+        cpa.call("plugin.reconfigure", {"config_yaml": base64.b64encode(random_config.encode()).decode()})
+        before = len(cpa.requests)
+        assert cpa.management("POST", base + "/run")[0] == 200
+        assert len(cpa.requests) == before + 2
+        for req in cpa.requests[before:]:
+            assert req["entry_protocol"] == req["exit_protocol"] == "openai-response"
+            assert req["auth_id"] in {"a", "b"} and req["forced_provider"] == "codex" and req["stream"] is False
+            assert req["headers"]["X-Openai-Internal-Codex-Responses-Lite"] == ["true"]
+            body = json.loads(base64.b64decode(req["body"]))
+            assert re.fullmatch(r"[1-9][+*/-][1-9]|[1-9] [+*/-] [1-9]", body["input"]), body
+            assert body["reasoning"] == {"effort": "low", "context": "all_turns"}
+            assert body["text"] == {"verbosity": "low"} and body["tool_choice"] == "none" and body["tools"] == []
+            assert body["store"] is False and body["stream"] is False and "messages" not in body
         cpa.call("plugin.quiesce")
         assert cpa.management("POST", base + "/run")[0] == 409
         cpa.call("plugin.reconfigure", lifecycle)

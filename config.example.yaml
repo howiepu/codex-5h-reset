@@ -2,6 +2,8 @@
 enabled: true
 model: gpt-5.6-luna
 prompt: "HI! Tell me the current time, in YYYY-MM-DD format."
+# 开启后每次账号请求生成一道随机算术题，忽略 prompt；默认保留固定发送内容。
+random_arithmetic: false
 timezone: Asia/Singapore
 schedules:
   - id: 早

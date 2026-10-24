@@ -191,7 +191,7 @@
   </section>
   <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="tab-settings" hidden>
     <form id="settings" class="card" autocomplete="off"><fieldset id="settingsFields" disabled>
-      <div class="settings-section"><h2>消息内容</h2><p>发送给每个启用 Codex 账号的模型与消息。</p><div class="field"><label for="model">模型</label><input id="model" name="model" spellcheck="false" required></div><div class="field"><label for="prompt">发送内容</label><textarea id="prompt" name="prompt" required></textarea></div></div>
+      <div class="settings-section"><h2>消息内容</h2><p>发送给每个启用 Codex 账号的模型与消息。</p><div class="field"><label for="model">模型</label><input id="model" name="model" spellcheck="false" required></div><div class="field"><label class="check"><input id="randomArithmetic" name="random_arithmetic" type="checkbox" aria-describedby="randomArithmeticHint">使用随机算术题</label><small id="randomArithmeticHint">每次账号请求重新生成 1～9 的加减乘除题，除法保证整除；题目可能重复。启用后保留下方固定内容，发送时使用算术题。</small></div><div class="field"><label for="prompt">固定发送内容</label><textarea id="prompt" name="prompt" required></textarea></div></div>
       <div class="settings-section"><h2>每日计划</h2><p>按所选时区执行，启动时不补发已经错过的时刻。</p><div class="field"><label for="timezone">时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div><div class="field"><div id="schedules"></div></div></div>
       <div class="settings-section"><h2>运行历史</h2><p>在持久化目录内保存最近的执行结果和日志。</p><div class="grid"><div><label for="maxLogs">最近日志条数</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required></div></div></div>
       <div class="settings-section"><h2>日志归档</h2><p>按 UTC 日期保存完整事件；可在运行日志中选择日期查看。</p><div class="field"><label for="retentionDays">归档保留天数</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
@@ -389,18 +389,25 @@ function addSchedule(schedule = {id: "", at: "05:00", enabled: true}) {
   const label = document.createElement("label"), enabled = document.createElement("input"); label.className = "check"; enabled.type = "checkbox"; enabled.dataset.field = "enabled"; enabled.checked = schedule.enabled !== false; label.append(enabled, document.createTextNode("启用")); row.append(label);
   const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "删除"; remove.addEventListener("click", () => { row.remove(); markDirty(); }); row.append(remove); $("schedules").append(row);
 }
+function updatePromptMode() {
+  const random = $("randomArithmetic").checked;
+  $("prompt").disabled = random; $("prompt").required = !random;
+}
+$("randomArithmetic").addEventListener("change", updatePromptMode);
 function fillConfig(cfg, fallback) {
   configuration = cfg;
   if (settingsDirty) return;
   const values = {...fallback, ...cfg};
   for (const name of ["model", "prompt", "timezone"]) $(name).value = values[name];
+  $("randomArithmetic").checked = values.random_arithmetic === true; updatePromptMode();
   $("maxLogs").value = values.max_log_entries; $("stateFile").value = values.state_file;
   $("retentionDays").value = values.history_retention_days ?? 30;
   $("webhookURL").value = values.notify_webhook_url || ""; $("barkURL").value = values.notify_bark_url || "";
   $("schedules").replaceChildren(); (values.schedules || []).forEach(addSchedule);
 }
 function validateConfig(cfg) {
-  if (!cfg.model || !cfg.prompt || !cfg.state_file) throw new Error("模型、发送内容和历史路径不能为空");
+  if (!cfg.model || !cfg.state_file) throw new Error("模型和历史路径不能为空");
+  if (!cfg.random_arithmetic && !cfg.prompt) throw new Error("固定发送内容不能为空");
   try { new Intl.DateTimeFormat("zh-CN", {timeZone: cfg.timezone}); } catch (_) { throw new Error("请输入有效的 IANA 时区，例如 Asia/Singapore"); }
   if (!Number.isInteger(cfg.max_log_entries) || cfg.max_log_entries < 1 || cfg.max_log_entries > 2000) throw new Error("保留日志数必须是 1–2000 的整数");
   if (!Number.isInteger(cfg.history_retention_days) || cfg.history_retention_days < 1 || cfg.history_retention_days > 365) throw new Error("归档保留天数必须是 1–365 的整数");
@@ -468,7 +475,7 @@ $("settings").addEventListener("submit", event => {
   event.preventDefault();
   action($("save"), "正在保存…", async () => {
     if (!configuration) throw new Error("请先读取配置");
-    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), notify_webhook_url: $("webhookURL").value.trim(), notify_bark_url: $("barkURL").value.trim()};
+    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), notify_webhook_url: $("webhookURL").value.trim(), notify_bark_url: $("barkURL").value.trim()};
     cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
     validateConfig(cfg);
     await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});

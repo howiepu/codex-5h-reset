@@ -24,6 +24,7 @@ type config struct {
 	Enabled              bool       `yaml:"enabled" json:"enabled"`
 	Model                string     `yaml:"model" json:"model"`
 	Prompt               string     `yaml:"prompt" json:"prompt"`
+	RandomArithmetic     bool       `yaml:"random_arithmetic" json:"random_arithmetic"`
 	Timezone             string     `yaml:"timezone" json:"timezone"`
 	Schedules            []schedule `yaml:"schedules" json:"schedules"`
 	MaxLogEntries        int        `yaml:"max_log_entries" json:"max_log_entries"`
@@ -60,8 +61,11 @@ func parseConfig(raw []byte) (config, error) {
 		return cfg, fmt.Errorf("无法解析插件配置：%w", err)
 	}
 	cfg.Model, cfg.Prompt = strings.TrimSpace(cfg.Model), strings.TrimSpace(cfg.Prompt)
-	if cfg.Model == "" || cfg.Prompt == "" {
-		return cfg, fmt.Errorf("model 和 prompt 不能为空")
+	if cfg.Model == "" {
+		return cfg, fmt.Errorf("model 不能为空")
+	}
+	if !cfg.RandomArithmetic && cfg.Prompt == "" {
+		return cfg, fmt.Errorf("固定发送内容的 prompt 不能为空")
 	}
 	if _, err := time.LoadLocation(cfg.Timezone); err != nil {
 		return cfg, fmt.Errorf("timezone 必须是有效的 IANA 时区")

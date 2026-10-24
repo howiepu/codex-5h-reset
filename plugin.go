@@ -91,6 +91,7 @@ func registration() any {
 			"ConfigFields": []map[string]string{
 				{"Name": "model", "Type": "string", "Description": "预热使用的 Codex 模型"},
 				{"Name": "prompt", "Type": "string", "Description": "发送给每个账号的消息"},
+				{"Name": "random_arithmetic", "Type": "boolean", "Description": "每次账号请求发送随机算术题，启用后忽略 prompt，默认关闭"},
 				{"Name": "timezone", "Type": "string", "Description": "每日定时使用的 IANA 时区"},
 				{"Name": "schedules", "Type": "array", "Description": "每日计划：id、at（HH:MM）、enabled"},
 				{"Name": "max_log_entries", "Type": "integer", "Description": "保留的日志数，1–2000"},

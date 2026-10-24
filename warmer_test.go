@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -30,11 +31,12 @@ func testWarmer(t *testing.T, host hostFunc) (*warmer, config) {
 
 func TestConfiguration(t *testing.T) {
 	cfg, err := parseConfig([]byte("enabled: true\npriority: 20\nstore: {repository: example}\nschedules:\n  - {id: 中, at: '10:05'}\n"))
-	if err != nil || cfg.Model != "gpt-5.6-luna" || len(cfg.Schedules) != 1 {
+	if err != nil || cfg.Model != "gpt-5.6-luna" || cfg.RandomArithmetic || len(cfg.Schedules) != 1 {
 		t.Fatalf("配置未保持默认值或宿主字段兼容：%+v %v", cfg, err)
 	}
 	for _, raw := range []string{
 		"model: ''", "prompt: ' '", "timezone: invalid", "max_log_entries: 0", "max_log_entries: 2001", "state_file: ''",
+		"random_arithmetic: invalid", "random_arithmetic: true\nmodel: ''",
 		"history_retention_days: 0", "history_retention_days: 366", "notify_webhook_url: ftp://example.com", "notify_bark_url: 'https://user:pass@example.com/key'", "notify_bark_url: 'https://example.com/key#fragment'",
 		"schedules: [{id: a, at: '5:00'}]", "schedules: [{id: '', at: '05:00'}]",
 		"schedules: [{id: a, at: '05:00'}, {id: a, at: '10:00'}]",
@@ -46,6 +48,10 @@ func TestConfiguration(t *testing.T) {
 	}
 	if _, err := parseConfig([]byte("schedules: [{id: a, at: '05:00'}, {id: b, at: '05:00', enabled: false}]")); err != nil {
 		t.Fatal(err)
+	}
+	cfg, err = parseConfig([]byte("random_arithmetic: true\nprompt: ' '\n"))
+	if err != nil || !cfg.RandomArithmetic || cfg.Prompt != "" {
+		t.Fatalf("随机算术题模式应允许固定内容留空：%+v %v", cfg, err)
 	}
 }
 
@@ -126,6 +132,59 @@ func TestWarmerCompatibleRequests(t *testing.T) {
 	}
 	if w.Status().History.LastRun == nil || w.Status().Running {
 		t.Fatal("结束后应保存完成时间并解除运行状态")
+	}
+}
+
+func TestRandomArithmeticRequests(t *testing.T) {
+	cfg := defaultConfig()
+	cfg.RandomArithmetic, cfg.Prompt = true, "fixed-content-must-not-be-sent"
+	var requests []modelRequest
+	w := newWarmer(func(method string, request, response any) error {
+		if method != "host.model.execute" {
+			t.Fatalf("不应增加其他宿主调用：%s", method)
+		}
+		requests = append(requests, request.(modelRequest))
+		response.(*modelResponse).StatusCode = 204
+		return nil
+	})
+	for range 256 {
+		if got := w.warmOne(cfg, authEntry{ID: "test-account"}); !got.Success {
+			t.Fatal("随机内容仍应仅按 HTTP 2xx 判断成功")
+		}
+	}
+	pattern := regexp.MustCompile(`^([1-9][+*/-][1-9]|[1-9] [+*/-] [1-9])$`)
+	prompts := map[string]bool{}
+	for _, req := range requests {
+		var body map[string]any
+		if err := json.Unmarshal(req.Body, &body); err != nil {
+			t.Fatal(err)
+		}
+		prompt, _ := body["input"].(string)
+		if !pattern.MatchString(prompt) {
+			t.Fatalf("应发送一道两个操作数均为 1～9 的算术题：%q", prompt)
+		}
+		compact := strings.ReplaceAll(prompt, " ", "")
+		if compact[1] == '/' && (compact[0]-'0')%(compact[2]-'0') != 0 {
+			t.Fatalf("除法必须整除：%q", prompt)
+		}
+		want := map[string]any{
+			"model": cfg.Model, "input": prompt, "stream": false, "store": false, "instructions": "",
+			"reasoning": map[string]any{"effort": "low", "context": "all_turns"},
+			"text":      map[string]any{"verbosity": "low"}, "tools": []any{}, "tool_choice": "none",
+		}
+		if !reflect.DeepEqual(body, want) {
+			t.Fatalf("随机模式必须使用低推理、禁用工具的完整 Lite 请求：%s", req.Body)
+		}
+		if req.AuthID != "test-account" || req.ForcedProvider != "codex" || req.EntryProtocol != "openai-response" || req.ExitProtocol != "openai-response" || req.Stream {
+			t.Fatalf("随机模式必须固定账号并使用非流式 Responses：%+v", req)
+		}
+		if req.Headers.Get("X-OpenAI-Internal-Codex-Responses-Lite") != "true" || req.Headers.Get("X-CLIProxyAPI-Account-Warmup") != "true" || req.Headers.Get("Accept") != "application/json" {
+			t.Fatalf("随机模式必须携带 Lite 和预热标记：%v", req.Headers)
+		}
+		prompts[prompt] = true
+	}
+	if len(prompts) < 2 {
+		t.Fatal("每次账号请求应重新随机出题")
 	}
 }
 

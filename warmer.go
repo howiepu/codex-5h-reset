@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/rand/v2"
 	"net/http"
 	"reflect"
 	"sort"
@@ -189,6 +191,19 @@ func selectAuths(entries []authEntry) []authEntry {
 	return selected
 }
 
+func randomArithmeticPrompt() string {
+	const operators = "+-*/"
+	operator := operators[rand.IntN(len(operators))]
+	left, right := rand.IntN(9)+1, rand.IntN(9)+1
+	if operator == '/' {
+		left = right * (rand.IntN(9/right) + 1)
+	}
+	if rand.IntN(2) == 0 {
+		return fmt.Sprintf("%d%c%d", left, operator, right)
+	}
+	return fmt.Sprintf("%d %c %d", left, operator, right)
+}
+
 func (w *warmer) warmOne(cfg config, auth authEntry) (r result) {
 	started := time.Now().UTC()
 	r = result{AuthID: auth.ID, Label: auth.Label, Model: cfg.Model, StartedAt: &started, Status: "failed"}
@@ -196,12 +211,26 @@ func (w *warmer) warmOne(cfg config, auth authEntry) (r result) {
 		finished := time.Now().UTC()
 		r.FinishedAt, r.DurationMS = &finished, finished.Sub(started).Milliseconds()
 	}()
-	body, _ := json.Marshal(map[string]any{
+	protocol := "openai"
+	headers := http.Header{"Content-Type": {"application/json"}}
+	payload := map[string]any{
 		"model": cfg.Model, "messages": []map[string]string{{"role": "user", "content": cfg.Prompt}}, "stream": false,
-	})
+	}
+	if cfg.RandomArithmetic {
+		protocol = "openai-response"
+		payload = map[string]any{
+			"model": cfg.Model, "input": randomArithmeticPrompt(), "stream": false, "store": false, "instructions": "",
+			"reasoning": map[string]string{"effort": "low", "context": "all_turns"},
+			"text":      map[string]string{"verbosity": "low"}, "tools": []any{}, "tool_choice": "none",
+		}
+		headers.Set("Accept", "application/json")
+		headers.Set("X-OpenAI-Internal-Codex-Responses-Lite", "true")
+		headers.Set("X-CLIProxyAPI-Account-Warmup", "true")
+	}
+	body, _ := json.Marshal(payload)
 	request := modelRequest{
-		EntryProtocol: "openai", ExitProtocol: "openai", Model: cfg.Model, Stream: false,
-		Body: body, Headers: http.Header{"Content-Type": {"application/json"}}, ForcedProvider: "codex", AuthID: auth.ID,
+		EntryProtocol: protocol, ExitProtocol: protocol, Model: cfg.Model, Stream: false,
+		Body: body, Headers: headers, ForcedProvider: "codex", AuthID: auth.ID,
 	}
 	var response modelResponse
 	if err := w.host("host.model.execute", request, &response); err != nil {

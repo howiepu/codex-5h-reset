@@ -12,6 +12,10 @@
 
 支持按时区设置多个每日时刻、手动预热、中文设置页面、逐账号结果和持久化日志。定时运行全部启用账号；手动可运行全部或勾选账号。启动时不发送请求，也不补发已错过的时刻；一轮正在运行时，其他触发返回冲突。
 
+在“预热设置 → 消息内容”中勾选“使用随机算术题”（`random_arithmetic: true`），手动和定时预热都会在每次账号请求前重新出题：两个数字为 1～9，随机使用 `+ - * /`，随机带空格，除法保证整除，例如 `3+5`、`8 / 2`。题目可能重复。启用后忽略但保留 `prompt`，固定内容可以留空；关闭后恢复发送固定内容，且不能为空。默认关闭，已有配置继续发送原文。
+
+随机算术模式使用 `openai-response` 入口和出口、`stream=false`、`store=false`，设置 `reasoning.effort=low`、Lite 所需的 `reasoning.context=all_turns`、`text.verbosity=low`、空工具列表及 `tool_choice=none`，并携带 `X-OpenAI-Internal-Codex-Responses-Lite: true` 和 `X-CLIProxyAPI-Account-Warmup: true`，避免 CPA 自动附加图片工具。Codex 不支持该链路的硬输出 Token 上限；CPA 的模型后缀和全局请求规则仍会生效。固定消息继续使用原 Chat 请求；两种模式都固定原账号和模型，仅按 HTTP 2xx 判断成功，不核对算术答案或额度窗口。
+
 管理功能沿用单文件页面与 Go 标准库，没有增加前端框架或模型 SDK：
 
 - 运行时显示每个账号的等待、执行、成功、失败、结果未确认或未发送状态，以及整轮进度和请求耗时。页面运行中每秒读取状态，空闲时每 15 秒读取；隐藏页面暂停轮询，刷新不覆盖未保存的设置。
@@ -29,6 +33,7 @@ go test -race ./...
 go vet ./...
 python3 scripts/check_ui.py
 node scripts/ui_auth_smoke.mjs
+node scripts/ui_settings_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
 python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.2
