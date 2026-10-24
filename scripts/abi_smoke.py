@@ -115,11 +115,13 @@ def main():
         if args.expected_version:
             assert metadata["Version"] == args.expected_version, metadata
         routes = cpa.call("management.register")
-        assert len(routes["routes"]) == 5 and len(routes["resources"]) == 1
+        assert len(routes["routes"]) == 6 and len(routes["resources"]) == 1
         base = "/v0/management/plugins/codex-5h-reset"
         code, html = cpa.management("GET", "/v0/resource/plugins/codex-5h-reset/status")
         assert code == 200 and b"<html" in html and b"ABI-smoke-only" not in html
         assert not cpa.requests, "注册插件时不得自动预热"
+        assert cpa.management("POST", base + "/test-notification", b"{}")[0] == 400
+        assert not cpa.requests, "测试通知不得执行模型"
         code, raw = cpa.management("GET", base + "/accounts")
         accounts = json.loads(raw)["accounts"]
         assert code == 200 and [a["id"] for a in accounts] == ["a", "b", "disabled"]

@@ -196,7 +196,7 @@
       <div class="settings-section"><h2>每日计划</h2><p>按所选时区执行，启动时不补发已经错过的时刻。</p><div class="field"><label for="timezone">时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div><div class="field"><div id="schedules"></div></div></div>
       <div class="settings-section"><h2>运行历史</h2><p>在持久化目录内保存最近的执行结果和日志。</p><div class="grid"><div><label for="maxLogs">最近日志条数</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required></div></div></div>
       <div class="settings-section"><h2>日志归档</h2><p>按 UTC 日期保存完整事件；可在运行日志中选择日期查看。</p><div class="field"><label for="retentionDays">归档保留天数</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
-      <div class="settings-section"><h2>异常通知</h2><p>默认关闭。每轮失败或定时任务无可用账号时，每个已配置渠道只发送一条汇总；不会重试模型请求。</p><div class="field"><label for="webhookURL">Webhook 地址（可选）</label><input id="webhookURL" name="notify_webhook_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><div class="grid"><div class="field"><label for="webhookUsername">Webhook 用户名（可选，Basic Auth）</label><input id="webhookUsername" name="notify_webhook_username" autocomplete="off" placeholder="例如 Apprise 的登录账号"></div><div class="field"><label for="webhookPassword">Webhook 密码（可选）</label><input id="webhookPassword" name="notify_webhook_password" type="password" autocomplete="new-password"></div></div><small>需要账号密码认证的接收端填写；两项留空关闭认证，密码中的空格会保留。</small><div class="field"><label for="barkURL">Bark 推送地址（可选，含设备 key）</label><input id="barkURL" name="notify_bark_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><small>通知地址和认证信息仅保存于 CPA 插件配置，不写入日志或历史文件。</small></div>
+      <div class="settings-section"><h2>异常通知</h2><p>默认关闭。每轮失败或定时任务无可用账号时，每个已配置渠道只发送一条汇总；不会重试模型请求。</p><div class="field"><label for="webhookURL">Webhook 地址（可选）</label><input id="webhookURL" name="notify_webhook_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><div class="grid"><div class="field"><label for="webhookUsername">Webhook 用户名（可选，Basic Auth）</label><input id="webhookUsername" name="notify_webhook_username" autocomplete="off" placeholder="例如 Apprise 的登录账号"></div><div class="field"><label for="webhookPassword">Webhook 密码（可选）</label><input id="webhookPassword" name="notify_webhook_password" type="password" autocomplete="new-password"></div></div><small>需要账号密码认证的接收端填写；两项留空关闭认证，密码中的空格会保留。</small><div class="field"><label for="barkURL">Bark 推送地址（可选，含设备 key）</label><input id="barkURL" name="notify_bark_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><small>通知地址和认证信息仅保存于 CPA 插件配置，不写入日志或历史文件。</small><div class="row"><button id="testNotification" type="button" aria-describedby="notificationTestHint">测试通知</button><small id="notificationTestHint">使用当前填写的配置，每个渠道发送一条测试消息，无需先保存。</small></div><p id="notificationTestResult" class="muted" role="status" aria-live="polite"></p></div>
       <div class="form-actions"><small id="saveHint">配置需点击保存后生效。</small><button id="add" type="button">添加时刻</button><button id="save" class="primary" type="submit">保存配置</button></div>
     </fieldset></form>
   </section>
@@ -428,20 +428,26 @@ function fillConfig(cfg, fallback) {
   $("webhookUsername").value = values.notify_webhook_username || ""; $("webhookPassword").value = values.notify_webhook_password || "";
   $("schedules").replaceChildren(); (values.schedules || []).forEach(addSchedule);
 }
-function validateConfig(cfg) {
-  if (!cfg.model || !cfg.state_file) throw new Error("模型和历史路径不能为空");
-  if (!cfg.random_arithmetic && !cfg.prompt) throw new Error("固定发送内容不能为空");
+function readNotificationConfig() {
+  return {notify_webhook_url: $("webhookURL").value.trim(), notify_webhook_username: $("webhookUsername").value.trim(), notify_webhook_password: $("webhookPassword").value, notify_bark_url: $("barkURL").value.trim()};
+}
+function validateNotificationConfig(cfg) {
   if (/[:\r\n]/.test(cfg.notify_webhook_username || "")) throw new Error("Webhook 用户名不能包含冒号或换行");
   if (cfg.notify_webhook_password && !cfg.notify_webhook_username) throw new Error("Webhook 配置密码时必须填写用户名");
-  try { new Intl.DateTimeFormat("zh-CN", {timeZone: cfg.timezone}); } catch (_) { throw new Error("请输入有效的 IANA 时区，例如 Asia/Singapore"); }
-  if (!Number.isInteger(cfg.max_log_entries) || cfg.max_log_entries < 1 || cfg.max_log_entries > 2000) throw new Error("保留日志数必须是 1–2000 的整数");
-  if (!Number.isInteger(cfg.history_retention_days) || cfg.history_retention_days < 1 || cfg.history_retention_days > 365) throw new Error("归档保留天数必须是 1–365 的整数");
   for (const value of [cfg.notify_webhook_url, cfg.notify_bark_url]) {
     if (!value) continue;
     let url;
     try { url = new URL(value); } catch (_) { throw new Error("通知地址必须是有效的 HTTP(S) URL"); }
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash) throw new Error("通知地址不能含用户名密码或片段，且必须使用 HTTP(S)");
   }
+}
+function validateConfig(cfg) {
+  if (!cfg.model || !cfg.state_file) throw new Error("模型和历史路径不能为空");
+  if (!cfg.random_arithmetic && !cfg.prompt) throw new Error("固定发送内容不能为空");
+  validateNotificationConfig(cfg);
+  try { new Intl.DateTimeFormat("zh-CN", {timeZone: cfg.timezone}); } catch (_) { throw new Error("请输入有效的 IANA 时区，例如 Asia/Singapore"); }
+  if (!Number.isInteger(cfg.max_log_entries) || cfg.max_log_entries < 1 || cfg.max_log_entries > 2000) throw new Error("保留日志数必须是 1–2000 的整数");
+  if (!Number.isInteger(cfg.history_retention_days) || cfg.history_retention_days < 1 || cfg.history_retention_days > 365) throw new Error("归档保留天数必须是 1–365 的整数");
   const ids = new Set(), times = new Set();
   for (const schedule of cfg.schedules) {
     if (!schedule.id || ids.has(schedule.id)) throw new Error("每个日程需要唯一且非空的名称");
@@ -500,13 +506,24 @@ $("settings").addEventListener("submit", event => {
   event.preventDefault();
   action($("save"), "正在保存…", async () => {
     if (!configuration) throw new Error("请先读取配置");
-    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), notify_webhook_url: $("webhookURL").value.trim(), notify_webhook_username: $("webhookUsername").value.trim(), notify_webhook_password: $("webhookPassword").value, notify_bark_url: $("barkURL").value.trim()};
+    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), ...readNotificationConfig()};
     cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
     validateConfig(cfg);
     await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
     configuration = cfg; settingsDirty = false; $("saveHint").textContent = "配置已保存。";
     await refreshStatus(); notice("配置已保存并应用。");
   });
+});
+$("testNotification").addEventListener("click", async () => {
+  const button = $("testNotification"), output = $("notificationTestResult");
+  button.disabled = true; output.textContent = "正在发送测试通知…";
+  try {
+    const cfg = readNotificationConfig(); validateNotificationConfig(cfg);
+    if (!cfg.notify_webhook_url && !cfg.notify_bark_url) throw new Error("请先填写 Webhook 或 Bark 地址");
+    const data = await request(base + "/test-notification", {method: "POST", body: JSON.stringify(cfg)});
+    output.textContent = data.results.map(r => r.channel + "：" + (r.success ? "测试通知已发送" : "发送失败，" + r.error)).join("；");
+  } catch (error) { output.textContent = error.message; }
+  finally { button.disabled = false; }
 });
 async function startManual(authIDs) {
   if (submitting || !connected || currentStatus?.running) return;

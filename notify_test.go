@@ -198,3 +198,82 @@ func TestScheduledEmptyAccountsNotifiesOncePerChannel(t *testing.T) {
 		})
 	}
 }
+
+func TestNotificationTestUsesDraftWithoutWarmingOrSaving(t *testing.T) {
+	const username, password = "fake-draft-user", " fake-draft-password "
+	var calls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.Method != http.MethodPost || r.Header.Get("Content-Type") != "application/json" {
+			t.Error("测试通知应发送 JSON POST")
+		}
+		var payload map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil || payload["source"] != "test" || payload["group"] != pluginID || !strings.Contains(payload["title"], "测试通知") || payload["run_id"] != "" {
+			t.Error("测试消息应有明确标记，不得伪造预热轮次")
+		}
+		switch r.URL.Path {
+		case "/draft-webhook":
+			user, pass, ok := r.BasicAuth()
+			if !ok || user != username || pass != password {
+				t.Error("测试应使用当前输入的认证，密码保留首尾空格")
+			}
+			rw.WriteHeader(http.StatusNoContent)
+		case "/draft-bark":
+			if r.Header.Get("Authorization") != "" {
+				t.Error("Webhook 认证不得发送给 Bark")
+			}
+			http.Error(rw, "private-receiver-body", http.StatusUnauthorized)
+		default:
+			t.Error("不能使用已保存的通知地址")
+		}
+	}))
+	defer server.Close()
+	w, cfg := testWarmer(t, func(method string, _, _ any) error {
+		if method != "host.log" {
+			t.Errorf("测试通知不能读取账号或执行模型：%s", method)
+		}
+		return nil
+	})
+	cfg.NotifyWebhookURL = server.URL + "/saved-webhook"
+	w.Configure(cfg)
+	before, _ := json.Marshal(w.Status())
+	diskBefore, _ := os.ReadFile(cfg.StateFile)
+	body, _ := json.Marshal(map[string]string{"notify_webhook_url": " " + server.URL + "/draft-webhook ", "notify_bark_url": server.URL + "/draft-bark", "notify_webhook_username": " " + username + " ", "notify_webhook_password": password})
+	response := w.handleManagement(managementRequest{Method: "POST", Path: managementBase + "/test-notification", Body: body})
+	var decoded struct {
+		Results []notificationResult `json:"results"`
+	}
+	if err := json.Unmarshal(response.Body, &decoded); err != nil || response.StatusCode != 200 || len(decoded.Results) != 2 || calls.Load() != 2 {
+		t.Fatalf("每个渠道应各发送一次并独立返回结果：%s", response.Body)
+	}
+	if !decoded.Results[0].Success || decoded.Results[0].Channel != "Webhook" || decoded.Results[1].Success || decoded.Results[1].Channel != "Bark" || decoded.Results[1].Error != "接收端返回 HTTP 401" {
+		t.Fatalf("应保留部分成功结果和安全的 HTTP 状态：%s", response.Body)
+	}
+	for _, secret := range []string{server.URL, username, strings.TrimSpace(password), "private-receiver-body"} {
+		if strings.Contains(string(response.Body), secret) {
+			t.Fatal("测试结果不得暴露地址、认证或接收端正文")
+		}
+	}
+	after, _ := json.Marshal(w.Status())
+	diskAfter, _ := os.ReadFile(cfg.StateFile)
+	if string(before) != string(after) || string(diskBefore) != string(diskAfter) || w.cfg.NotifyWebhookURL != cfg.NotifyWebhookURL {
+		t.Fatal("测试不能保存配置或修改运行历史")
+	}
+}
+
+func TestNotificationTestRejectsInvalidInput(t *testing.T) {
+	w := newWarmer(func(string, any, any) error { t.Fatal("无效测试请求不能调用宿主"); return nil })
+	for _, body := range []string{
+		"", `null`, `[]`, `{`, `{}`, `{} {}`, `{"unknown":"private-input-canary"}`, `{"notify_webhook_url":true}`,
+		`{"notify_webhook_url":"file:///private-input-canary"}`,
+		`{"notify_webhook_url":"https://user:private-input-canary@example.com"}`,
+		`{"notify_webhook_url":"https://example.com/#private-input-canary"}`,
+		`{"notify_webhook_username":"user:private-input-canary"}`,
+		`{"notify_webhook_password":"private-input-canary"}`,
+	} {
+		response := w.handleManagement(managementRequest{Method: "POST", Path: managementBase + "/test-notification", Body: []byte(body)})
+		if response.StatusCode != 400 || strings.Contains(string(response.Body), "private-input-canary") {
+			t.Fatalf("应安全拒绝错误的通知测试请求：%s", response.Body)
+		}
+	}
+}

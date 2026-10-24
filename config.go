@@ -78,22 +78,8 @@ func parseConfig(raw []byte) (config, error) {
 	if cfg.HistoryRetentionDays < 1 || cfg.HistoryRetentionDays > 365 {
 		return cfg, fmt.Errorf("history_retention_days 必须在 1 到 365 之间")
 	}
-	for _, value := range []*string{&cfg.NotifyWebhookURL, &cfg.NotifyBarkURL} {
-		*value = strings.TrimSpace(*value)
-		if *value == "" {
-			continue
-		}
-		u, err := url.Parse(*value)
-		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
-			return cfg, fmt.Errorf("通知地址必须是有效的 HTTP(S) URL，不能包含用户名密码或片段")
-		}
-	}
-	cfg.NotifyWebhookUsername = strings.TrimSpace(cfg.NotifyWebhookUsername)
-	if strings.ContainsAny(cfg.NotifyWebhookUsername, ":\r\n") {
-		return cfg, fmt.Errorf("Webhook 用户名不能包含冒号或换行")
-	}
-	if cfg.NotifyWebhookPassword != "" && cfg.NotifyWebhookUsername == "" {
-		return cfg, fmt.Errorf("Webhook 配置密码时必须填写用户名")
+	if err := validateNotificationConfig(&cfg); err != nil {
+		return cfg, err
 	}
 	if strings.TrimSpace(cfg.StateFile) == "" {
 		return cfg, fmt.Errorf("state_file 不能为空")
@@ -120,6 +106,27 @@ func parseConfig(raw []byte) (config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func validateNotificationConfig(cfg *config) error {
+	for _, value := range []*string{&cfg.NotifyWebhookURL, &cfg.NotifyBarkURL} {
+		*value = strings.TrimSpace(*value)
+		if *value == "" {
+			continue
+		}
+		u, err := url.Parse(*value)
+		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
+			return fmt.Errorf("通知地址必须是有效的 HTTP(S) URL，不能包含用户名密码或片段")
+		}
+	}
+	cfg.NotifyWebhookUsername = strings.TrimSpace(cfg.NotifyWebhookUsername)
+	if strings.ContainsAny(cfg.NotifyWebhookUsername, ":\r\n") {
+		return fmt.Errorf("Webhook 用户名不能包含冒号或换行")
+	}
+	if cfg.NotifyWebhookPassword != "" && cfg.NotifyWebhookUsername == "" {
+		return fmt.Errorf("Webhook 配置密码时必须填写用户名")
+	}
+	return nil
 }
 
 func nextRuns(cfg config, now time.Time) []plannedRun {

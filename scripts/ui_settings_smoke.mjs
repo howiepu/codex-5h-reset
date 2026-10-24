@@ -6,8 +6,9 @@ const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf
 const models = html.slice(html.indexOf("function renderModelHint()"), html.indexOf("function renderAccounts()"));
 const functions = html.slice(html.indexOf("function updatePromptMode()"), html.indexOf("function markDirty()"));
 const submit = html.slice(html.indexOf('$("settings").addEventListener("submit"'), html.indexOf("async function startManual("));
-const nodes = new Map(), saved = [];
-let pending;
+const nodes = new Map(), saved = [], notificationRequests = [];
+let pending, waitNotification = Promise.resolve();
+const notificationResults = [{channel: "Webhook", success: true}, {channel: "Bark", success: false, error: "接收端返回 HTTP 401"}];
 const context = vm.createContext({
   configuration: null, settingsDirty: false, accounts: [], base: "/plugin", URL,
   document: {createElement: tag => ({tagName: tag, value: ""})},
@@ -22,6 +23,12 @@ const context = vm.createContext({
   addSchedule() {}, notice() {}, refreshStatus: async () => {},
   action: (_button, _message, fn) => { pending = fn(); },
   request: async (path, options) => {
+    if (path === "/plugin/test-notification") {
+      assert.equal(options.method, "POST");
+      notificationRequests.push(JSON.parse(options.body));
+      await waitNotification;
+      return {results: notificationResults};
+    }
     assert.equal(path, "/plugin/config");
     assert.equal(options.method, "PUT");
     saved.push(JSON.parse(options.body));
@@ -81,4 +88,30 @@ assert.equal(nodes.get("modelOptions").children.length, 0);
 context.accounts = [];
 context.renderModelOptions();
 assert.match(nodes.get("modelHint").textContent, /暂无可执行的 Codex 账号/);
-console.log("管理页设置验证通过：随机算术题、固定内容保留、Webhook 认证、账号模型提示与旧宿主兼容。");
+nodes.get("webhookURL").value = " http://127.0.0.1/draft-webhook ";
+nodes.get("barkURL").value = " http://127.0.0.1/draft-bark ";
+nodes.get("webhookUsername").value = " fake-draft-user ";
+nodes.get("webhookPassword").value = " fake-draft-password ";
+nodes.get("model").value = "";
+context.settingsDirty = true;
+const beforeTestConfig = JSON.stringify(context.configuration), savedBeforeTest = saved.length;
+let release;
+waitNotification = new Promise(resolve => { release = resolve; });
+const testing = nodes.get("testNotification").listeners.click();
+assert.equal(nodes.get("testNotification").disabled, true, "发送中禁用按钮，避免重复点击");
+release(); await testing;
+assert.equal(nodes.get("testNotification").disabled, false);
+assert.deepEqual(notificationRequests, [{notify_webhook_url: "http://127.0.0.1/draft-webhook", notify_webhook_username: "fake-draft-user", notify_webhook_password: " fake-draft-password ", notify_bark_url: "http://127.0.0.1/draft-bark"}]);
+assert.match(nodes.get("notificationTestResult").textContent, /Webhook：测试通知已发送.*Bark：发送失败，接收端返回 HTTP 401/);
+assert.equal(saved.length, savedBeforeTest, "测试不能保存配置");
+assert.equal(JSON.stringify(context.configuration), beforeTestConfig);
+assert.equal(context.settingsDirty, true, "测试不能清除未保存状态");
+nodes.get("webhookURL").value = nodes.get("barkURL").value = "";
+await nodes.get("testNotification").listeners.click();
+assert.match(nodes.get("notificationTestResult").textContent, /请先填写 Webhook 或 Bark 地址/);
+nodes.get("webhookUsername").value = "invalid:name";
+await nodes.get("testNotification").listeners.click();
+assert.match(nodes.get("notificationTestResult").textContent, /用户名不能包含冒号或换行/);
+assert.equal(nodes.get("testNotification").disabled, false, "失败后允许修正配置重新测试");
+assert.equal(notificationRequests.length, 1, "校验失败不能发送请求");
+console.log("管理页设置验证通过：消息模式、Webhook 认证、模型提示、测试通知使用未保存输入并独立显示渠道结果。");

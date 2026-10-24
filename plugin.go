@@ -69,6 +69,7 @@ func dispatch(w *warmer, method string, raw []byte) (any, error) {
 				{"Method": "GET", "Path": "/plugins/" + pluginID + "/logs"},
 				{"Method": "GET", "Path": "/plugins/" + pluginID + "/accounts"},
 				{"Method": "POST", "Path": "/plugins/" + pluginID + "/stop"},
+				{"Method": "POST", "Path": "/plugins/" + pluginID + "/test-notification"},
 			},
 			"resources": []map[string]string{{"Path": "/status", "Menu": pluginName, "Description": "Codex 每日预热设置与运行记录"}},
 		}, nil
@@ -126,6 +127,22 @@ func (w *warmer) handleManagement(req managementRequest) managementResponse {
 			return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 		}
 		return jsonResponse(http.StatusOK, map[string]any{"accounts": accounts})
+	case "POST " + managementBase + "/test-notification":
+		var cfg config
+		trimmed := bytes.TrimSpace(req.Body)
+		decoder := json.NewDecoder(bytes.NewReader(trimmed))
+		decoder.DisallowUnknownFields()
+		if !json.Valid(trimmed) || trimmed[0] != '{' || decoder.Decode(&cfg) != nil {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "测试通知请求格式错误"})
+		}
+		if err := validateNotificationConfig(&cfg); err != nil {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		if cfg.NotifyWebhookURL == "" && cfg.NotifyBarkURL == "" {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": "请先填写 Webhook 或 Bark 地址"})
+		}
+		payload, _ := json.Marshal(map[string]string{"title": pluginName + " 测试通知", "body": "通知通道测试，请忽略此消息。", "group": pluginID, "source": "test"})
+		return jsonResponse(http.StatusOK, map[string]any{"results": sendNotifications(cfg, payload)})
 	case "POST " + managementBase + "/stop":
 		var body struct {
 			RunID string `json:"run_id"`

@@ -9,6 +9,12 @@ import (
 	"time"
 )
 
+type notificationResult struct {
+	Channel string `json:"channel"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
 func (w *warmer) notifyFailure(cfg config, job *runJob) {
 	w.mu.Lock()
 	p := job.progress
@@ -21,12 +27,23 @@ func (w *warmer) notifyFailure(cfg config, job *runJob) {
 		body += p.Error
 	}
 	payload, _ := json.Marshal(map[string]any{"title": pluginName + " 预热异常", "body": body, "group": pluginID, "run_id": p.ID, "source": p.Source})
+	for _, delivery := range sendNotifications(cfg, payload) {
+		level, event, message := "info", "notification.sent", delivery.Channel+" 异常汇总已发送"
+		if !delivery.Success {
+			level, event, message = "warn", "notification.failed", delivery.Channel+" 异常汇总发送失败，请检查通知配置"
+		}
+		w.log(level, event, message, map[string]any{"run_id": p.ID, "channel": delivery.Channel})
+	}
+}
+
+func sendNotifications(cfg config, payload []byte) []notificationResult {
+	results := []notificationResult{}
 	client := &http.Client{Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	for _, channel := range []struct{ name, url string }{{"Webhook", cfg.NotifyWebhookURL}, {"Bark", cfg.NotifyBarkURL}} {
 		if channel.url == "" {
 			continue
 		}
-		level, event, message := "info", "notification.sent", channel.name+" 异常汇总已发送"
+		delivery := notificationResult{Channel: channel.name}
 		req, err := http.NewRequest(http.MethodPost, channel.url, bytes.NewReader(payload))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
@@ -39,14 +56,16 @@ func (w *warmer) notifyFailure(cfg config, job *runJob) {
 				_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 4096))
 				response.Body.Close()
 				if response.StatusCode < 200 || response.StatusCode >= 300 {
-					err = fmt.Errorf("通知未被接收")
+					delivery.Error = fmt.Sprintf("接收端返回 HTTP %d", response.StatusCode)
 				}
 			}
 		}
 		if err != nil {
-			level, event, message = "warn", "notification.failed", channel.name+" 异常汇总发送失败，请检查通知配置"
+			delivery.Error = "发送失败，请检查通知地址、认证信息或网络"
 		}
-		// URL 可能包含通知密钥，网络错误和响应正文都不写入日志。
-		w.log(level, event, message, map[string]any{"run_id": p.ID, "channel": channel.name})
+		// URL 可能包含通知密钥，网络错误和响应正文不向外返回。
+		delivery.Success = delivery.Error == ""
+		results = append(results, delivery)
 	}
+	return results
 }

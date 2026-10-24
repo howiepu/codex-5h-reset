@@ -21,6 +21,8 @@ func TestManagementRoutesAndPublicResource(t *testing.T) {
 		{Method: "POST", Path: resourcePath},
 		{Method: "POST", Path: "/v0/resource/plugins/" + pluginID + "/run"},
 		{Method: "GET", Path: managementBase + "/run"},
+		{Method: "GET", Path: managementBase + "/test-notification"},
+		{Method: "POST", Path: "/v0/resource/plugins/" + pluginID + "/test-notification"},
 		{Method: "GET", Path: "/unregistered/status"},
 	} {
 		if got := w.handleManagement(req); got.StatusCode != 404 {

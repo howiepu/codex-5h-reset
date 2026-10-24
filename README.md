@@ -106,6 +106,8 @@ CPA 或容器更新后能否保留这些文件，仍取决于历史目录是否�
 
 Apprise 等需要 Basic Auth 的接收端，可在“异常通知”中填写 Webhook 用户名和密码（`notify_webhook_username`、`notify_webhook_password`）；两项默认留空关闭认证，填写用户名后启用。用户名不能包含冒号或换行，密码原样保留，包括首尾空格。认证只附加到 Webhook，不会发送给 Bark，不跟随重定向；用户名和密码同样不会出现在状态、历史或日志中。通知 URL 仍不能嵌入账号密码。
 
+填写后点击“测试通知”，按表单当前内容向每个已填写渠道发送一条测试消息，无需先保存。结果显示在按钮下方；失败时只显示安全的提示或 HTTP 状态码，不返回地址、认证信息或接收端正文。测试不会保存配置、执行模型预热或改变运行记录，仍使用每渠道 5 秒超时、不跟随重定向、不重试的规则。
+
 ## 管理接口
 
 下列接口使用 CPA 的管理鉴权：
@@ -115,6 +117,7 @@ Apprise 等需要 Basic Auth 的接收端，可在“异常通知”中填写 We
 | GET | `/v0/management/plugins/codex-5h-reset/status` | 状态、计划和最近结果 |
 | POST | `/v0/management/plugins/codex-5h-reset/run` | 手动执行一轮，支持所选账号、请求 ID 和异步响应 |
 | POST | `/v0/management/plugins/codex-5h-reset/stop` | 停止指定轮次的剩余队列 |
+| POST | `/v0/management/plugins/codex-5h-reset/test-notification` | 使用请求中的通知配置发送测试消息，返回逐渠道结果，不保存配置 |
 | GET | `/v0/management/plugins/codex-5h-reset/accounts` | Codex 账号列表和可执行状态 |
 | GET | `/v0/management/plugins/codex-5h-reset/logs` | 最近日志；`?day=YYYY-MM-DD` 读取 UTC 日期归档 |
 | GET / PUT | `/v0/management/plugins/codex-5h-reset/config` | CPA 提供的配置接口 |
