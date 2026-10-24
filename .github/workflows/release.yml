@@ -27,13 +27,15 @@ jobs:
         with:
           node-version: '22'
       - name: Check management page JavaScript
-        run: python3 scripts/check_ui.py
+        run: |
+          python3 scripts/check_ui.py
+          node scripts/ui_auth_smoke.mjs
       - name: Build and verify native ABI
         env:
           RELEASE_REF: ${{ github.ref }}
           RELEASE_NAME: ${{ github.ref_name }}
         run: |
-          PLUGIN_VERSION=0.1.1
+          PLUGIN_VERSION=0.1.2
           if [[ "$RELEASE_REF" == refs/tags/* ]]; then
             PLUGIN_VERSION="${RELEASE_NAME#v}"
           fi

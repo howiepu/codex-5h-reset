@@ -17,7 +17,7 @@
 - 运行时显示每个账号的等待、执行、成功、失败、结果未确认或未发送状态，以及整轮进度和请求耗时。页面运行中每秒读取状态，空闲时每 15 秒读取；隐藏页面暂停轮询，刷新不覆盖未保存的设置。
 - “停止本轮”等待 CPA 完成当前请求，然后跳过剩余账号，不取消 CPA 的在途执行。不会修改后续定时计划。
 - 日志按事件、账号和说明分列，支持级别、关键词、轮次 ID 筛选，以及按 UTC 日期读取归档和导出筛选结果。最多同时渲染 500 条，导出包含全部筛选结果。
-- 已在本插件页面保存的管理密钥可用于打开页面自动连接；主题跟随同源 CPA 页面，独立打开时使用 CPA 保存的主题或系统主题。
+- 已在本插件页面保存的管理密钥可用于打开页面自动连接；连接先单次验证鉴权，401 时清除保存的无效密钥并停止轮询，403 显示 CPA 的拒绝原因；主题跟随同源 CPA 页面，独立打开时使用 CPA 保存的主题或系统主题。
 - HTTP 错误分为认证、限流、请求拒绝、服务异常等。超时或缺少 CPA 结果时提示“结果未确认，可能已消耗额度”，仍记为未成功，不触发模型重试。
 
 ## 本地验证
@@ -28,19 +28,20 @@
 go test -race ./...
 go vet ./...
 python3 scripts/check_ui.py
+node scripts/ui_auth_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
-python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.1
-python3 scripts/package.py dist/codex-5h-reset.dylib 0.1.1 darwin arm64
+python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.2
+python3 scripts/package.py dist/codex-5h-reset.dylib 0.1.2 darwin arm64
 ```
 
 以上构建命令适用于 Apple Silicon macOS。Linux amd64 上把输出后缀改为 `.so`，打包参数改为 `linux amd64`。ABI 自检使用模拟宿主与临时历史文件，不访问网络或真实账号。页面脚本检查需要 Node.js，不需要安装 npm 依赖；本项目没有 `package.json` 或 TypeScript/lint 脚本，Go 静态检查使用 `go vet`。
 
 ## 发布与接入 CPA
 
-仓库包含 `registry.json` 和 GitHub Actions。推送代码后，推送 `v0.1.1` 这样的版本 tag，工作流会执行检查、构建 Linux amd64 共享库、运行 ABI 自检，然后发布 CPA 要求的文件：
+仓库包含 `registry.json` 和 GitHub Actions。推送代码后，推送 `v0.1.2` 这样的版本 tag，工作流会执行检查、构建 Linux amd64 共享库、运行 ABI 自检，然后发布 CPA 要求的文件：
 
-- `codex-5h-reset_0.1.1_linux_amd64.zip`，共享库位于 ZIP 根目录。
+- `codex-5h-reset_0.1.2_linux_amd64.zip`，共享库位于 ZIP 根目录。
 - `checksums.txt`，包含 ZIP 的 SHA-256。
 
 版本由 tag 写入共享库元信息。首版自动发布目标为 Linux amd64；本地 macOS 构建用于开发验证，不能安装到 Linux CPA。
