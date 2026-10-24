@@ -44,12 +44,17 @@ func sendNotifications(cfg config, payload []byte) []notificationResult {
 			continue
 		}
 		delivery := notificationResult{Channel: channel.name}
-		req, err := http.NewRequest(http.MethodPost, channel.url, bytes.NewReader(payload))
-		if err == nil {
-			req.Header.Set("Content-Type", "application/json")
-			if channel.name == "Webhook" && cfg.NotifyWebhookUsername != "" {
-				req.SetBasicAuth(cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword)
+		var req *http.Request
+		var err error
+		if channel.name == "Webhook" {
+			req, err = webhookRequest(cfg, payload)
+		} else {
+			req, err = http.NewRequest(http.MethodPost, channel.url, bytes.NewReader(payload))
+			if err == nil {
+				req.Header.Set("Content-Type", "application/json")
 			}
+		}
+		if err == nil {
 			var response *http.Response
 			response, err = client.Do(req)
 			if response != nil {

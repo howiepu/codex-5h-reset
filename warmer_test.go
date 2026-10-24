@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -56,8 +57,10 @@ func TestConfiguration(t *testing.T) {
 		t.Fatalf("随机算术题模式应允许固定内容留空：%+v %v", cfg, err)
 	}
 	cfg, err = parseConfig([]byte("notify_webhook_username: '  fake-user  '\nnotify_webhook_password: ' fake-password with spaces '\n"))
-	if err != nil || cfg.NotifyWebhookUsername != "fake-user" || cfg.NotifyWebhookPassword != " fake-password with spaces " {
-		t.Fatal("Webhook 用户名应去掉首尾空格，密码必须原样保留")
+	req := &http.Request{Header: http.Header{"Authorization": {cfg.NotifyWebhookHeaders["Authorization"]}}}
+	user, password, ok := req.BasicAuth()
+	if err != nil || !ok || user != "fake-user" || password != " fake-password with spaces " || cfg.NotifyWebhookUsername != "" || cfg.NotifyWebhookPassword != "" {
+		t.Fatal("旧版认证应自动转换为请求头，保留密码空格并清除旧字段")
 	}
 }
 

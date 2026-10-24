@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -136,6 +137,10 @@ func TestWebhookBasicAuthIsScopedRedactedAndNotRedirected(t *testing.T) {
 	})
 	cfg.NotifyWebhookURL, cfg.NotifyBarkURL = server.URL+"/webhook", server.URL+"/bark"
 	cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword = username, password
+	cfg.NotifyWebhookBody = `{"body":"{{notification}}","private":"private-body-canary"}`
+	if err := validateNotificationConfig(&cfg); err != nil {
+		t.Fatal(err)
+	}
 	w.Configure(cfg)
 	_, _ = w.Run("manual")
 	cfg.NotifyWebhookURL = server.URL + "/redirect"
@@ -152,7 +157,7 @@ func TestWebhookBasicAuthIsScopedRedactedAndNotRedirected(t *testing.T) {
 	}
 	logs, _ := json.Marshal(archived)
 	for _, data := range [][]byte{raw, disk, logs} {
-		if strings.Contains(string(data), username) || strings.Contains(string(data), strings.TrimSpace(password)) {
+		if strings.Contains(string(data), username) || strings.Contains(string(data), strings.TrimSpace(password)) || strings.Contains(string(data), cfg.NotifyWebhookHeaders["Authorization"]) || strings.Contains(string(data), "private-body-canary") {
 			t.Fatal("Webhook 认证不得出现在状态、历史或日志中")
 		}
 	}
@@ -238,7 +243,7 @@ func TestNotificationTestUsesDraftWithoutWarmingOrSaving(t *testing.T) {
 	w.Configure(cfg)
 	before, _ := json.Marshal(w.Status())
 	diskBefore, _ := os.ReadFile(cfg.StateFile)
-	body, _ := json.Marshal(map[string]string{"notify_webhook_url": " " + server.URL + "/draft-webhook ", "notify_bark_url": server.URL + "/draft-bark", "notify_webhook_username": " " + username + " ", "notify_webhook_password": password})
+	body, _ := json.Marshal(map[string]any{"notify_webhook_url": " " + server.URL + "/draft-webhook ", "notify_bark_url": server.URL + "/draft-bark", "notify_webhook_method": "POST", "notify_webhook_format": "json", "notify_webhook_headers": map[string]string{"Authorization": "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))}})
 	response := w.handleManagement(managementRequest{Method: "POST", Path: managementBase + "/test-notification", Body: body})
 	var decoded struct {
 		Results []notificationResult `json:"results"`
