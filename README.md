@@ -37,17 +37,17 @@ node scripts/ui_auth_smoke.mjs
 node scripts/ui_settings_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
-python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.3
-python3 scripts/package.py dist/codex-5h-reset.dylib 0.1.3 darwin arm64
+python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.4
+python3 scripts/package.py dist/codex-5h-reset.dylib 0.1.4 darwin arm64
 ```
 
 以上构建命令适用于 Apple Silicon macOS。Linux amd64 上把输出后缀改为 `.so`，打包参数改为 `linux amd64`。ABI 自检使用模拟宿主与临时历史文件，不访问网络或真实账号。页面脚本检查需要 Node.js，不需要安装 npm 依赖；本项目没有 `package.json` 或 TypeScript/lint 脚本，Go 静态检查使用 `go vet`。
 
 ## 发布与接入 CPA
 
-仓库包含 `registry.json` 和 GitHub Actions。推送代码后，推送 `v0.1.3` 这样的版本 tag，工作流会执行检查、构建 Linux amd64 共享库、运行 ABI 自检，然后发布 CPA 要求的文件：
+仓库包含 `registry.json` 和 GitHub Actions。推送代码后，推送 `v0.1.4` 这样的版本 tag，工作流会执行检查、构建 Linux amd64 共享库、运行 ABI 自检，然后发布 CPA 要求的文件：
 
-- `codex-5h-reset_0.1.3_linux_amd64.zip`，共享库位于 ZIP 根目录。
+- `codex-5h-reset_0.1.4_linux_amd64.zip`，共享库位于 ZIP 根目录。
 - `checksums.txt`，包含 ZIP 的 SHA-256。
 
 版本由 tag 写入共享库元信息。首版自动发布目标为 Linux amd64；本地 macOS 构建用于开发验证，不能安装到 Linux CPA。
