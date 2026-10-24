@@ -257,6 +257,7 @@ func (w *warmer) Status() status {
 	defer w.mu.Unlock()
 	cfg := w.cfg
 	cfg.NotifyWebhookURL, cfg.NotifyBarkURL = "", ""
+	cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword = "", ""
 	cfg.Schedules = append([]schedule{}, cfg.Schedules...)
 	h := w.history
 	h.LastResults = append([]result{}, h.LastResults...)

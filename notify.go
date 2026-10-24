@@ -30,6 +30,9 @@ func (w *warmer) notifyFailure(cfg config, job *runJob) {
 		req, err := http.NewRequest(http.MethodPost, channel.url, bytes.NewReader(payload))
 		if err == nil {
 			req.Header.Set("Content-Type", "application/json")
+			if channel.name == "Webhook" && cfg.NotifyWebhookUsername != "" {
+				req.SetBasicAuth(cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword)
+			}
 			var response *http.Response
 			response, err = client.Do(req)
 			if response != nil {

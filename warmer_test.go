@@ -37,6 +37,8 @@ func TestConfiguration(t *testing.T) {
 	for _, raw := range []string{
 		"model: ''", "prompt: ' '", "timezone: invalid", "max_log_entries: 0", "max_log_entries: 2001", "state_file: ''",
 		"random_arithmetic: invalid", "random_arithmetic: true\nmodel: ''",
+		"notify_webhook_username: 'user:name'", "notify_webhook_password: password-without-user",
+		"notify_webhook_username: \"user\\nname\"",
 		"history_retention_days: 0", "history_retention_days: 366", "notify_webhook_url: ftp://example.com", "notify_bark_url: 'https://user:pass@example.com/key'", "notify_bark_url: 'https://example.com/key#fragment'",
 		"schedules: [{id: a, at: '5:00'}]", "schedules: [{id: '', at: '05:00'}]",
 		"schedules: [{id: a, at: '05:00'}, {id: a, at: '10:00'}]",
@@ -52,6 +54,10 @@ func TestConfiguration(t *testing.T) {
 	cfg, err = parseConfig([]byte("random_arithmetic: true\nprompt: ' '\n"))
 	if err != nil || !cfg.RandomArithmetic || cfg.Prompt != "" {
 		t.Fatalf("随机算术题模式应允许固定内容留空：%+v %v", cfg, err)
+	}
+	cfg, err = parseConfig([]byte("notify_webhook_username: '  fake-user  '\nnotify_webhook_password: ' fake-password with spaces '\n"))
+	if err != nil || cfg.NotifyWebhookUsername != "fake-user" || cfg.NotifyWebhookPassword != " fake-password with spaces " {
+		t.Fatal("Webhook 用户名应去掉首尾空格，密码必须原样保留")
 	}
 }
 

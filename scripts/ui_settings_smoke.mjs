@@ -31,6 +31,7 @@ const original = {
   model: "test-model", prompt: "keep this fixed message", timezone: "Asia/Singapore",
   max_log_entries: 200, state_file: "test-history.json", history_retention_days: 30,
   schedules: [], notify_webhook_url: "", notify_bark_url: "",
+  notify_webhook_username: "fake-user", notify_webhook_password: " fake-password with spaces ",
 };
 context.fillConfig(original, {});
 const mode = nodes.get("randomArithmetic"), prompt = nodes.get("prompt");
@@ -53,4 +54,8 @@ assert.equal(prompt.disabled, true);
 assert.doesNotThrow(() => context.validateConfig({...original, random_arithmetic: true, prompt: ""}));
 assert.throws(() => context.validateConfig({...original, random_arithmetic: false, prompt: ""}), /固定发送内容不能为空/);
 assert.throws(() => context.validateConfig({...original, random_arithmetic: true, model: ""}), /模型和历史路径不能为空/);
-console.log("管理页设置验证通过：随机算术题开关读写、旧配置兼容、固定内容保留和按模式校验。");
+assert.equal(nodes.get("webhookPassword").value, original.notify_webhook_password, "读取密码时必须保留首尾空格");
+assert.throws(() => context.validateConfig({...original, notify_webhook_username: "user:name"}), /用户名不能包含冒号或换行/);
+assert.throws(() => context.validateConfig({...original, notify_webhook_username: ""}), /必须填写用户名/);
+assert.doesNotThrow(() => context.validateConfig({...original, notify_webhook_username: "", notify_webhook_password: ""}));
+console.log("管理页设置验证通过：随机算术题开关读写、固定内容保留、Webhook 认证保存和校验。");

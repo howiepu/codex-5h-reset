@@ -21,17 +21,19 @@ const (
 var version = "0.1.2"
 
 type config struct {
-	Enabled              bool       `yaml:"enabled" json:"enabled"`
-	Model                string     `yaml:"model" json:"model"`
-	Prompt               string     `yaml:"prompt" json:"prompt"`
-	RandomArithmetic     bool       `yaml:"random_arithmetic" json:"random_arithmetic"`
-	Timezone             string     `yaml:"timezone" json:"timezone"`
-	Schedules            []schedule `yaml:"schedules" json:"schedules"`
-	MaxLogEntries        int        `yaml:"max_log_entries" json:"max_log_entries"`
-	StateFile            string     `yaml:"state_file" json:"state_file"`
-	HistoryRetentionDays int        `yaml:"history_retention_days" json:"history_retention_days"`
-	NotifyWebhookURL     string     `yaml:"notify_webhook_url" json:"notify_webhook_url"`
-	NotifyBarkURL        string     `yaml:"notify_bark_url" json:"notify_bark_url"`
+	Enabled               bool       `yaml:"enabled" json:"enabled"`
+	Model                 string     `yaml:"model" json:"model"`
+	Prompt                string     `yaml:"prompt" json:"prompt"`
+	RandomArithmetic      bool       `yaml:"random_arithmetic" json:"random_arithmetic"`
+	Timezone              string     `yaml:"timezone" json:"timezone"`
+	Schedules             []schedule `yaml:"schedules" json:"schedules"`
+	MaxLogEntries         int        `yaml:"max_log_entries" json:"max_log_entries"`
+	StateFile             string     `yaml:"state_file" json:"state_file"`
+	HistoryRetentionDays  int        `yaml:"history_retention_days" json:"history_retention_days"`
+	NotifyWebhookURL      string     `yaml:"notify_webhook_url" json:"notify_webhook_url"`
+	NotifyWebhookUsername string     `yaml:"notify_webhook_username" json:"notify_webhook_username"`
+	NotifyWebhookPassword string     `yaml:"notify_webhook_password" json:"notify_webhook_password"`
+	NotifyBarkURL         string     `yaml:"notify_bark_url" json:"notify_bark_url"`
 }
 
 type schedule struct {
@@ -85,6 +87,13 @@ func parseConfig(raw []byte) (config, error) {
 		if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
 			return cfg, fmt.Errorf("通知地址必须是有效的 HTTP(S) URL，不能包含用户名密码或片段")
 		}
+	}
+	cfg.NotifyWebhookUsername = strings.TrimSpace(cfg.NotifyWebhookUsername)
+	if strings.ContainsAny(cfg.NotifyWebhookUsername, ":\r\n") {
+		return cfg, fmt.Errorf("Webhook 用户名不能包含冒号或换行")
+	}
+	if cfg.NotifyWebhookPassword != "" && cfg.NotifyWebhookUsername == "" {
+		return cfg, fmt.Errorf("Webhook 配置密码时必须填写用户名")
 	}
 	if strings.TrimSpace(cfg.StateFile) == "" {
 		return cfg, fmt.Errorf("state_file 不能为空")

@@ -19,6 +19,9 @@ max_log_entries: 200
 history_retention_days: 30
 # 默认关闭，每轮有失败时按渠道发送一条摘要。地址可能含密钥，请保护 CPA 配置文件。
 notify_webhook_url: ""
+# Apprise 等需要 Basic Auth 的接收端填写；密码原样保留，两项留空关闭认证。
+notify_webhook_username: ""
+notify_webhook_password: ""
 notify_bark_url: ""
 # CPA 容器内的路径；宿主机应持久化挂载 /CLIProxyAPI/plugins。
 state_file: /CLIProxyAPI/plugins/data/codex-5h-reset/history.json

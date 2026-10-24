@@ -98,6 +98,8 @@ func registration() any {
 				{"Name": "state_file", "Type": "string", "Description": "运行历史 JSON 路径，应位于持久化卷内"},
 				{"Name": "history_retention_days", "Type": "integer", "Description": "日志归档保留天数，1–365，默认 30"},
 				{"Name": "notify_webhook_url", "Type": "string", "Description": "可选：每轮失败汇总的 Webhook 地址"},
+				{"Name": "notify_webhook_username", "Type": "string", "Description": "可选：Webhook Basic Auth 用户名，留空关闭认证"},
+				{"Name": "notify_webhook_password", "Type": "string", "Description": "可选：Webhook Basic Auth 密码，仅保存于 CPA 配置"},
 				{"Name": "notify_bark_url", "Type": "string", "Description": "可选：Bark 推送地址，含设备 key"},
 			},
 		},

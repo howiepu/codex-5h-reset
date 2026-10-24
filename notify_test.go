@@ -98,3 +98,62 @@ func TestNotificationSuccessIsQuietAndDeliveryDoesNotRetry(t *testing.T) {
 		t.Fatal("未配置通知时不得外发")
 	}
 }
+
+func TestWebhookBasicAuthIsScopedRedactedAndNotRedirected(t *testing.T) {
+	const username, password = "fake-webhook-user-canary", " fake-webhook-password-canary "
+	var webhooks, barks, redirected atomic.Int32
+	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { redirected.Add(1) }))
+	defer target.Close()
+	server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/bark" {
+			barks.Add(1)
+			if r.Header.Get("Authorization") != "" {
+				t.Error("Webhook 认证不得发送到 Bark")
+			}
+		} else {
+			webhooks.Add(1)
+			user, pass, ok := r.BasicAuth()
+			if !ok || user != username || pass != password {
+				t.Error("Webhook Basic Auth 不正确，密码必须保留空格")
+			}
+		}
+		if r.URL.Path == "/redirect" {
+			rw.Header().Set("Location", target.URL)
+			rw.WriteHeader(http.StatusFound)
+			return
+		}
+		rw.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	w, cfg := testWarmer(t, func(method string, _, response any) error {
+		if method == "host.auth.list" {
+			return json.Unmarshal([]byte(`{"files":[{"id":"a","provider":"codex"}]}`), response)
+		}
+		if method == "host.model.execute" {
+			response.(*modelResponse).StatusCode = 429
+		}
+		return nil
+	})
+	cfg.NotifyWebhookURL, cfg.NotifyBarkURL = server.URL+"/webhook", server.URL+"/bark"
+	cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword = username, password
+	w.Configure(cfg)
+	_, _ = w.Run("manual")
+	cfg.NotifyWebhookURL = server.URL + "/redirect"
+	w.Configure(cfg)
+	_, _ = w.Run("manual")
+	if webhooks.Load() != 2 || barks.Load() != 2 || redirected.Load() != 0 {
+		t.Fatal("每个渠道只发送一次，不得把认证跟随重定向发送")
+	}
+	raw, _ := json.Marshal(w.Status())
+	disk, _ := os.ReadFile(cfg.StateFile)
+	archived, err := w.Logs(w.Status().History.LastRun.Format("2006-01-02"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	logs, _ := json.Marshal(archived)
+	for _, data := range [][]byte{raw, disk, logs} {
+		if strings.Contains(string(data), username) || strings.Contains(string(data), strings.TrimSpace(password)) {
+			t.Fatal("Webhook 认证不得出现在状态、历史或日志中")
+		}
+	}
+}
