@@ -1,0 +1,22 @@
+# CPA 中插件 codex-5h-reset 的配置，不是 CPA 的完整 config.yaml。
+enabled: true
+model: gpt-5.6-luna
+prompt: "HI! Tell me the current time, in YYYY-MM-DD format."
+timezone: Asia/Singapore
+schedules:
+  - id: 早
+    at: "05:00"
+    enabled: true
+  - id: 中
+    at: "10:05"
+    enabled: true
+  - id: 晚
+    at: "15:10"
+    enabled: true
+max_log_entries: 200
+history_retention_days: 30
+# 默认关闭，每轮有失败时按渠道发送一条摘要。地址可能含密钥，请保护 CPA 配置文件。
+notify_webhook_url: ""
+notify_bark_url: ""
+# CPA 容器内的路径；宿主机应持久化挂载 /CLIProxyAPI/plugins。
+state_file: /CLIProxyAPI/plugins/data/codex-5h-reset/history.json

@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#09090b" media="(prefers-color-scheme: dark)">
+  <title>Codex 5H Reset</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --background: #fff; --foreground: #18181b; --muted: #f4f4f5; --muted-foreground: #71717a;
+      --border: #e4e4e7; --primary: #18181b; --primary-foreground: #fafafa; --ring: #71717a;
+      --danger: #b91c1c; --danger-background: #fef2f2; --warning: #854d0e; --warning-background: #fefce8;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--foreground); background: var(--background); font-size: 14px; line-height: 1.5;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme=light]) { --background: #09090b; --foreground: #fafafa; --muted: #18181b; --muted-foreground: #a1a1aa; --border: #27272a; --primary: #fafafa; --primary-foreground: #18181b; --ring: #71717a; --danger: #fca5a5; --danger-background: #301415; --warning: #fde68a; --warning-background: #29200f; }
+    }
+    :root[data-theme=dark] { color-scheme: dark; --background: #09090b; --foreground: #fafafa; --muted: #18181b; --muted-foreground: #a1a1aa; --border: #27272a; --primary: #fafafa; --primary-foreground: #18181b; --danger: #fca5a5; --danger-background: #301415; --warning: #fde68a; --warning-background: #29200f; }
+    :root[data-theme=light] { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 28px 24px; }
+    button, input, textarea, select { font: inherit; }
+    button, summary { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; color: inherit; background: var(--background); font-size: 13px; font-weight: 500; cursor: pointer; transition: background-color .15s, box-shadow .15s; }
+    button:hover { background: var(--muted); }
+    button.primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+    button.primary:hover { opacity: .9; }
+    button:disabled { cursor: not-allowed; opacity: .45; }
+    :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+    svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 26px; line-height: 1.3; font-weight: 650; letter-spacing: -.035em; text-wrap: balance; scroll-margin-top: 16px; }
+    h2 { font-size: 14px; font-weight: 600; }
+    .muted, small { color: var(--muted-foreground); }
+    .app { width: min(1120px, 100%); min-width: 0; margin: auto; }
+    .skip-link { position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 12px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); transform: translateY(-150%); }
+    .skip-link:focus { transform: translateY(0); }
+    .app-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
+    .brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
+    .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 9px; background: var(--primary); color: var(--primary-foreground); }
+    .brand-mark svg { width: 22px; height: 22px; }
+    .brand-name { font-size: 16px; font-weight: 650; letter-spacing: -.02em; }
+    .brand-description { font-size: 12px; color: var(--muted-foreground); }
+    .header-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .badge { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; min-width: 0; padding: 2px 7px; border: 1px solid var(--border); border-radius: 5px; color: var(--muted-foreground); background: var(--muted); font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+    .badge.error { color: var(--danger); background: var(--danger-background); border-color: transparent; }
+    .badge.warn { color: var(--warning); background: var(--warning-background); border-color: transparent; }
+    .connection { margin-top: 20px; border: 1px solid var(--border); border-radius: 8px; }
+    .connection > summary { display: flex; align-items: center; gap: 8px; padding: 12px 16px; list-style: none; font-size: 13px; font-weight: 500; cursor: pointer; }
+    .connection > summary::-webkit-details-marker { display: none; }
+    .connection-hint { margin-left: auto; font-size: 12px; color: var(--muted-foreground); font-weight: 400; }
+    .connection .chevron { margin-left: 4px; color: var(--muted-foreground); }
+    .connection[open] .chevron { transform: rotate(180deg); }
+    .connection-form { padding: 0 16px 16px; }
+    .row { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+    .grow { min-width: 0; flex: 1 1 200px; }
+    label { display: block; margin: 0 0 7px; font-size: 13px; font-weight: 500; }
+    label.check { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; font-size: 12px; font-weight: 400; }
+    input:not([type=checkbox]), textarea, select { width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--background); color: inherit; box-shadow: 0 1px 2px #00000005; }
+    input:not([type=checkbox]) { height: 36px; }
+    input[type=checkbox] { width: 15px; height: 15px; margin: 0; accent-color: var(--primary); }
+    textarea { min-height: 96px; resize: vertical; line-height: 1.6; }
+    small { font-size: 12px; }
+    #notice { min-height: 40px; padding: 10px 0; font-size: 12px; color: var(--muted-foreground); white-space: pre-wrap; overflow-wrap: anywhere; }
+    #notice.error { color: var(--danger); }
+    #storageError { padding: 12px 16px; margin-bottom: 16px; border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); overflow-wrap: anywhere; }
+    .menu { display: inline-flex; gap: 4px; flex-wrap: wrap; max-width: 100%; padding: 4px; border-radius: 8px; background: var(--muted); }
+    .menu button { min-height: 34px; border-color: transparent; background: transparent; color: var(--muted-foreground); }
+    .menu button:hover { color: var(--foreground); }
+    .menu button[aria-current=page] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 3px #00000012; }
+    .page-heading { padding: 28px 0 20px; min-width: 0; }
+    .page-heading p { margin-top: 7px; font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+    .view, .card { min-width: 0; max-width: 100%; }
+    .card { border: 1px solid var(--border); border-radius: 8px; overflow: clip; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+    .card-title { display: flex; align-items: center; gap: 8px; }
+    .card-header p { margin-top: 3px; font-size: 12px; color: var(--muted-foreground); }
+    .card-body { padding: 20px; }
+    .empty { padding: 54px 20px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
+    .table-wrap { width: 100%; max-width: 100%; min-width: 0; max-height: 62vh; overflow: auto; overscroll-behavior: contain; }
+    table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+    th, td { padding: 12px 14px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; word-break: break-word; }
+    th { position: sticky; top: 0; z-index: 1; background: var(--muted); font-weight: 500; color: var(--muted-foreground); }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: color-mix(in srgb, var(--muted) 50%, transparent); }
+    .cell-content { display: block; min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+    td .badge { display: inline-flex; }
+    .event-cell, .log-details pre { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+    .log-details summary { width: fit-content; max-width: 100%; cursor: pointer; color: var(--muted-foreground); font-size: 12px; }
+    .log-details pre { max-width: 100%; max-height: 240px; margin: 10px 0 0; padding: 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; word-break: break-word; overflow: auto; }
+    dl { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 16px 24px; margin: 0; font-size: 13px; }
+    dt { color: var(--muted-foreground); }
+    dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+    fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+    fieldset:disabled { opacity: .55; }
+    .settings-section { padding: 20px; border-bottom: 1px solid var(--border); }
+    .settings-section > p { margin: 4px 0 20px; font-size: 12px; color: var(--muted-foreground); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    .field + .field, .grid + .field { margin-top: 20px; }
+    .schedule { display: grid; grid-template-columns: minmax(0, 1fr) 120px auto auto; gap: 12px; align-items: end; padding: 14px 0; border-bottom: 1px solid var(--border); }
+    .schedule:first-child { padding-top: 0; }
+    .schedule:last-child { border: 0; }
+    .schedule label { min-width: 0; margin: 0; }
+    .schedule label input:not([type=checkbox]) { margin-top: 7px; }
+    .schedule label.check { min-height: 36px; margin-bottom: 0; }
+    .form-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px; }
+    .toolbar { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .toolbar label { margin: 0; flex: 1 1 140px; min-width: 0; }
+    .toolbar input, .toolbar select { display: block; margin-top: 6px; height: 36px; }
+    .view > .card + .card { margin-top: 16px; }
+    #runProgress { margin: 0 0 18px; padding: 14px 18px; overflow-wrap: anywhere; }
+    #runProgress .row { align-items: center; justify-content: space-between; }
+    progress { display: block; width: 100%; height: 8px; margin: 12px 0; accent-color: var(--primary); }
+    .account-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; padding: 16px 18px; max-height: 340px; overflow: auto; }
+    .account-list label.check { align-items: start; margin: 0; padding: 10px; border: 1px solid var(--border); border-radius: 6px; overflow-wrap: anywhere; }
+    .account-list input { flex: none; margin-top: 3px; }
+    .account-list span { min-width: 0; }
+    .account-list small { display: block; margin-top: 4px; }
+    footer { margin-top: 20px; padding-bottom: 8px; color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
+    [hidden] { display: none !important; }
+    @media (max-width: 680px) {
+      body { padding: 20px 16px; }
+      .header-actions { width: 100%; }
+      .header-actions .badge { margin-right: auto; }
+      .menu { display: flex; width: 100%; }
+      .menu button { flex: 1 0 calc(50% - 4px); }
+      .connection-hint { display: none; }
+      .connection .chevron { margin-left: auto; }
+      .page-heading { padding: 24px 0 16px; }
+      h1 { font-size: 23px; }
+      .grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+      .schedule { grid-template-columns: minmax(0, 1fr) 110px; }
+      .schedule button { justify-self: end; }
+      dl { grid-template-columns: 76px minmax(0, 1fr); gap: 14px; }
+      .data-table, .data-table tbody, .data-table tr { display: block; width: 100%; }
+      .data-table colgroup { display: none; }
+      .data-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+      .data-table tbody tr { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+      .data-table tbody tr:last-child { border: 0; }
+      .data-table td { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 12px; width: 100%; padding: 5px 0; border: 0; }
+      .data-table td::before { content: attr(data-label); color: var(--muted-foreground); }
+    }
+    @media (prefers-reduced-motion: reduce) { button { transition: none; } }
+  </style>
+</head>
+<body>
+<a class="skip-link" href="#viewTitle">跳到当前页面内容</a>
+<main class="app">
+  <header class="app-header">
+    <div class="brand">
+      <div class="brand-mark"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></div>
+      <div><div class="brand-name" translate="no">Codex 5H Reset</div><div class="brand-description">账号预热与运行记录</div></div>
+    </div>
+    <div class="header-actions">
+      <span id="connectionState" class="badge">未连接</span>
+      <button id="refresh" type="button" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>刷新</button>
+      <button id="run" class="primary" type="button" disabled><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7z"/></svg>预热全部</button>
+      <button id="stopRun" type="button" hidden>停止本轮</button>
+    </div>
+  </header>
+  <details id="connection" class="connection" open>
+    <summary><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M9 8H6a4 4 0 0 0 0 8h3m6-8h3a4 4 0 0 1 0 8h-3"/></svg>连接设置<span class="connection-hint">使用 CPA 管理密钥连接</span><svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <form id="connectionForm" class="connection-form" autocomplete="off">
+      <div class="row"><div class="grow"><label for="key">CPA 管理密钥</label><input id="key" name="management-key" type="password" autocomplete="off" spellcheck="false"></div><button id="load" class="primary" type="submit">连接并读取</button></div>
+      <label class="check"><input id="remember" name="remember_key" type="checkbox">在此浏览器中记住密钥</label>
+      <small>默认仅在当前标签页保存；勾选后保存到本机浏览器。</small>
+    </form>
+  </details>
+  <div id="notice" role="status" aria-live="polite">连接 CPA 后即可读取日志、管理计划与手动预热。</div>
+  <section id="runProgress" class="card" aria-label="本轮进度" hidden><div class="row"><strong id="progressTitle">本轮进度</strong><span id="progressCount" class="badge"></span></div><progress id="progressBar" aria-label="已完成账号数量" max="1" value="0"></progress><p id="progressMessage" class="muted"></p></section>
+  <nav class="menu" aria-label="插件菜单">
+    <button id="tab-logs" type="button" data-view="logs" aria-controls="view-logs" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8m-8 4h5"/></svg>运行日志</button>
+    <button id="tab-status" type="button" data-view="status" aria-controls="view-status"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>运行状态</button>
+    <button id="tab-results" type="button" data-view="results" aria-controls="view-results"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-17a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4v2"/></svg>账号结果</button>
+    <button id="tab-settings" type="button" data-view="settings" aria-controls="view-settings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>预热设置</button>
+  </nav>
+  <div class="page-heading"><h1 id="viewTitle" tabindex="-1">运行日志</h1><p id="viewDescription">查看每次触发和账号请求的记录，最新事件显示在前。</p></div>
+  <p id="storageError" role="alert" hidden></p>
+  <section id="view-logs" class="view" data-view-panel="logs" aria-labelledby="tab-logs">
+    <div class="card"><div class="card-header"><div class="card-title"><h2>事件记录</h2><span id="logCount" class="badge">0 条</span></div><small id="logLimit">最新在前</small></div><div class="toolbar"><label for="logSearch">搜索账号、事件或轮次<input id="logSearch" type="search" placeholder="输入关键词…"></label><label for="logLevel">日志级别<select id="logLevel"><option value="">全部</option><option value="warn">警告</option><option value="error">错误</option><option value="info">信息</option></select></label><label for="logDay">归档日期（UTC，可清空）<input id="logDay" type="date"></label><button id="exportLogs" type="button" disabled>导出筛选结果</button></div><div id="logs" class="table-wrap"><p class="empty">连接 CPA 后查看运行日志。</p></div></div>
+  </section>
+  <section id="view-status" class="view" data-view-panel="status" aria-labelledby="tab-status" hidden>
+    <div class="card"><div class="card-header"><div><h2>预热概况</h2><p>每日计划、最近运行与当前执行状态。</p></div></div><div class="card-body"><p class="muted" data-needs-connection>连接 CPA 后查看运行状态。</p><dl id="status"></dl></div></div>
+  </section>
+  <section id="view-results" class="view" data-view-panel="results" aria-labelledby="tab-results" hidden>
+    <div class="card"><div class="card-header"><div><h2>手动选择账号</h2><p>定时计划始终执行全部启用账号；不可用与冷却状态交给 CPA 判断。</p></div><span id="selectionCount" class="badge">未加载</span></div><div class="toolbar"><button id="selectAll" type="button" disabled>全选可执行账号</button><button id="clearSelection" type="button" disabled>清空选择</button><button id="runSelected" class="primary" type="button" disabled>预热选中账号</button></div><fieldset id="accountChoices" disabled><div id="accounts" class="account-list"><p class="muted">连接 CPA 后加载账号。</p></div></fieldset></div>
+    <div class="card"><div class="card-header"><div><h2>最近一轮账号结果</h2><p>每个启用账号依次请求一次；HTTP 2xx 记为成功。</p></div></div><div id="results" class="table-wrap"><p class="empty">连接 CPA 后查看账号结果。</p></div></div>
+  </section>
+  <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="tab-settings" hidden>
+    <form id="settings" class="card" autocomplete="off"><fieldset id="settingsFields" disabled>
+      <div class="settings-section"><h2>消息内容</h2><p>发送给每个启用 Codex 账号的模型与消息。</p><div class="field"><label for="model">模型</label><input id="model" name="model" spellcheck="false" required></div><div class="field"><label for="prompt">发送内容</label><textarea id="prompt" name="prompt" required></textarea></div></div>
+      <div class="settings-section"><h2>每日计划</h2><p>按所选时区执行，启动时不补发已经错过的时刻。</p><div class="field"><label for="timezone">时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div><div class="field"><div id="schedules"></div></div></div>
+      <div class="settings-section"><h2>运行历史</h2><p>在持久化目录内保存最近的执行结果和日志。</p><div class="grid"><div><label for="maxLogs">最近日志条数</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required></div></div></div>
+      <div class="settings-section"><h2>日志归档</h2><p>按 UTC 日期保存完整事件；可在运行日志中选择日期查看。</p><div class="field"><label for="retentionDays">归档保留天数</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
+      <div class="settings-section"><h2>异常通知</h2><p>默认关闭。每轮有失败时，每个已配置渠道只发送一条汇总；不会重试模型请求。</p><div class="field"><label for="webhookURL">Webhook 地址（可选）</label><input id="webhookURL" name="notify_webhook_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><div class="field"><label for="barkURL">Bark 推送地址（可选，含设备 key）</label><input id="barkURL" name="notify_bark_url" type="password" autocomplete="new-password" placeholder="留空关闭"></div><small>通知地址仅保存于 CPA 插件配置，不写入日志或历史文件。</small></div>
+      <div class="form-actions"><small id="saveHint">配置需点击保存后生效。</small><button id="add" type="button">添加时刻</button><button id="save" class="primary" type="submit">保存配置</button></div>
+    </fieldset></form>
+  </section>
+  <footer>HTTP 2xx 代表请求成功，不额外验证额度窗口。启用或停用插件请在 CPA 插件列表中操作。</footer>
+</main>
+<script>
+"use strict";
+const base = "/v0/management/plugins/codex-5h-reset";
+const storageKey = "codex-5h-reset.management-key";
+const $ = id => document.getElementById(id);
+let configuration = null, currentStatus = null, connected = false, submitting = false, settingsDirty = false;
+let accounts = [], logEntries = [], pollTimer, statusRequest, pendingRun, logsSignature = "", resultsSignature = "";
+const selected = new Set();
+const views = {
+  logs: ["运行日志", "查看每次触发和账号请求的记录，最新事件显示在前。"],
+  status: ["运行状态", "查看当前执行状态与按时区安排的每日计划。"],
+  results: ["账号结果", "选择手动预热的账号，查看各账号的执行进度与结果。"],
+  settings: ["预热设置", "管理模型、发送内容、每日计划、历史与异常通知。"]
+};
+const eventNames = {"configuration.updated": "配置加载", "schedule.planned": "计划安排", "schedule.triggered": "定时触发", "schedule.skipped": "计划跳过", "warmup.started": "开始预热", "warmup.selection": "账号选择", "warmup.no_credentials": "无可用账号", "warmup.credential_started": "账号开始", "warmup.credential": "账号结果", "warmup.finished": "本轮结束", "notification.sent": "通知已发送", "notification.failed": "通知失败"};
+const fieldNames = {run_id: "轮次 ID", source: "触发来源", auth_id: "账号 ID", label: "账号名称", model: "模型", status_code: "HTTP 状态", success: "请求成功", duration_ms: "耗时（ms）", error_kind: "错误分类", auth_total: "凭证总数", codex_total: "Codex 账号数", selected_count: "本轮选择数", skipped_disabled: "跳过禁用数", skipped_missing_id: "跳过缺少 ID 数", reported_unavailable: "列表中 CPA 标记不可用数（可选，交 CPA 判断）", reported_inactive: "列表中 CPA 非 active 数（可选，交 CPA 判断）", credential_count: "本轮账号数", success_count: "成功数", failure_count: "失败数", skipped_count: "未发送数", schedule_id: "日程", scheduled_at: "计划时间", channel: "通知渠道"};
+function showView(view) {
+  for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
+  for (const button of document.querySelectorAll("[data-view]")) {
+    if (button.dataset.view === view) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
+  $("viewTitle").textContent = views[view][0]; $("viewDescription").textContent = views[view][1];
+}
+for (const button of document.querySelectorAll("[data-view]")) button.addEventListener("click", () => showView(button.dataset.view));
+try {
+  const saved = localStorage.getItem(storageKey);
+  $("key").value = saved || sessionStorage.getItem(storageKey) || "";
+  $("remember").checked = Boolean(saved);
+} catch (_) { /* 浏览器禁用存储时仍可手动连接。 */ }
+function rememberKey() {
+  try {
+    localStorage.removeItem(storageKey); sessionStorage.removeItem(storageKey);
+    ($("remember").checked ? localStorage : sessionStorage).setItem(storageKey, $("key").value.trim());
+  } catch (_) { /* 存储不是请求成功的前提。 */ }
+}
+$("remember").addEventListener("change", rememberKey);
+function notice(text, error = false) { $("notice").textContent = text; $("notice").className = error ? "error" : ""; }
+async function request(path, options = {}) {
+  const key = $("key").value.trim();
+  if (!key) throw new Error("请输入 CPA 管理密钥");
+  rememberKey();
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+  try {
+    const headers = new Headers({Authorization: "Bearer " + key});
+    if (options.body) headers.set("Content-Type", "application/json");
+    const response = await fetch(path, {...options, headers, signal: controller.signal, cache: "no-store", credentials: "same-origin"});
+    const text = await response.text();
+    let data;
+    try { data = JSON.parse(text); } catch (_) { throw new Error("CPA 返回非 JSON 响应，HTTP " + response.status); }
+    if (!response.ok) {
+      const error = new Error(response.status === 401 || response.status === 403 ? "CPA 管理密钥失效，请重新连接。" : data.error || data.message || ("请求失败，HTTP " + response.status));
+      error.status = response.status; throw error;
+    }
+    return data;
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("连接 CPA 超时，请刷新状态确认执行情况。");
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+function table(target, headings, rows, keys = []) {
+  const container = $(target); container.replaceChildren();
+  if (!rows.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "暂无记录。"; container.append(empty); return; }
+  const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : "账号结果");
+  const cols = document.createElement("colgroup");
+  (target === "logs" ? [15, 8, 13, 20, 29, 15] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
+  const head = table.createTHead().insertRow();
+  headings.forEach(title => { const th = document.createElement("th"); th.scope = "col"; th.textContent = title; head.append(th); });
+  const body = table.createTBody();
+  rows.forEach((values, rowIndex) => { const tr = body.insertRow(); tr.dataset.key = keys[rowIndex] || ""; values.forEach((value, index) => {
+    const td = tr.insertCell(), text = String(value ?? "—");
+    let content;
+    if (value instanceof Node) content = value;
+    else if (text.length > 180) content = expandable(text, text.slice(0, 72) + "…");
+    else { content = document.createElement("span"); content.textContent = text; }
+    td.dataset.label = headings[index]; content.classList.add("cell-content");
+    if ((target === "logs" && index === 1) || (target === "results" && index === 2)) {
+      content.classList.add("badge");
+      if (value === "error" || value === "失败") content.classList.add("error");
+      else if (value === "warn" || value === "结果未确认") content.classList.add("warn");
+    }
+    td.append(content);
+  }); });
+  container.append(table);
+}
+function expandable(text, label) {
+  const details = document.createElement("details"), summary = document.createElement("summary"), pre = document.createElement("pre");
+  details.className = "log-details"; summary.textContent = label; pre.textContent = text; pre.tabIndex = 0;
+  details.append(summary, pre); return details;
+}
+function formatTime(value, timezone) { return value ? new Date(value).toLocaleString("zh-CN", {timeZone: timezone, hour12: false}) : "尚未运行"; }
+function duration(ms) { return ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) + " s"; }
+function sourceName(value) { return value === "manual" ? "手动预热" : value?.startsWith("schedule:") ? "定时 · " + value.slice(9) : value || "—"; }
+function resultName(r) {
+  if (r.error_kind === "uncertain") return "结果未确认";
+  return {queued: "等待发送", running: "执行中", success: "成功", failed: "失败", stopped: "未发送"}[r.status] || (r.success ? "成功" : "失败");
+}
+function renderControls() {
+  const busy = !connected || submitting || currentStatus?.running, enabled = currentStatus?.configuration.enabled;
+  $("run").disabled = busy || !enabled;
+  $("runSelected").disabled = busy || !enabled || !selected.size;
+  $("selectAll").disabled = busy || !accounts.some(a => !a.disabled && a.id?.trim());
+  $("clearSelection").disabled = busy || !selected.size;
+  $("accountChoices").disabled = busy;
+  $("selectionCount").textContent = "已选 " + selected.size + " / " + accounts.filter(a => !a.disabled && a.id?.trim()).length;
+  const p = currentStatus?.history.last_progress;
+  $("stopRun").hidden = !currentStatus?.running || !!p?.finished_at;
+  $("stopRun").disabled = !connected || submitting || p?.stop_requested;
+  $("stopRun").textContent = p?.stop_requested ? "正在停止…" : "停止本轮";
+}
+function renderStatus(data) {
+  currentStatus = data;
+  const cfg = data.configuration, history = data.history, p = history.last_progress;
+  $("status").replaceChildren();
+  const next = data.schedules.map(s => s.id + " · " + formatTime(s.time, cfg.timezone)).join("；") || "未设置启用的日程";
+  for (const [label, value] of [["插件版本", data.version], ["状态", data.running ? "正在预热" : cfg.enabled ? "已启用" : "已停用"], ["时区", cfg.timezone], ["下次计划", cfg.enabled ? next : "插件已停用"], ["最近运行", formatTime(history.last_run, cfg.timezone)], ["触发来源", sourceName(history.last_source)], ["最近轮次", p?.id || "—"]]) {
+    const dt = document.createElement("dt"), dd = document.createElement("dd"); dt.textContent = label; dd.textContent = value; $("status").append(dt, dd);
+  }
+  $("storageError").textContent = [data.state_error, data.archive_error].filter(Boolean).join("；");
+  $("storageError").hidden = !$("storageError").textContent;
+  $("runProgress").hidden = !p;
+  if (p) {
+    $("progressTitle").textContent = data.running ? p.finished_at ? "正在完成本轮记录" : p.stop_requested ? "等待当前请求结束后停止" : "正在逐账号预热" : p.error ? "本轮异常结束" : p.skipped ? "本轮已停止" : p.total ? "本轮已结束" : "本轮没有可执行账号";
+    $("progressCount").textContent = p.completed + " / " + p.total;
+    $("progressBar").max = Math.max(1, p.total); $("progressBar").value = p.completed;
+    const active = (history.last_results || []).find(r => r.status === "running");
+    const elapsed = Math.max(0, new Date(p.finished_at || Date.now()) - new Date(p.started_at));
+    $("progressMessage").textContent = p.error || p.succeeded + " 成功 · " + p.failed + " 失败 · " + p.skipped + " 未发送 · " + duration(elapsed) + (active ? " · 当前：" + (active.label || active.auth_id) : "");
+  }
+  const signature = JSON.stringify(history.last_results);
+  if (signature !== resultsSignature) {
+    resultsSignature = signature;
+    table("results", ["账号", "模型", "结果", "HTTP", "耗时", "说明"], (history.last_results || []).map(r => [r.label || r.auth_id, r.model, resultName(r), r.status_code || "—", r.finished_at ? duration(r.duration_ms || 0) : "—", r.error || (r.status === "stopped" ? "停止后未发送请求" : "—")]));
+  }
+  renderControls();
+}
+function renderAccounts() {
+  $("accounts").replaceChildren();
+  const valid = new Set(accounts.filter(a => !a.disabled && a.id?.trim()).map(a => a.id));
+  for (const id of selected) if (!valid.has(id)) selected.delete(id);
+  if (!accounts.length) { const empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "CPA 中没有 Codex 账号。"; $("accounts").append(empty); }
+  accounts.forEach(a => {
+    const label = document.createElement("label"), input = document.createElement("input"), text = document.createElement("span"), note = document.createElement("small");
+    label.className = "check"; input.type = "checkbox"; input.checked = selected.has(a.id); input.disabled = !valid.has(a.id); input.dataset.authId = a.id || "";
+    text.textContent = a.label || a.id || "缺少账号 ID";
+    note.textContent = a.disabled ? "已停用，将跳过" : !a.id?.trim() ? "缺少账号 ID，将跳过" : a.unavailable ? "CPA 标记不可用，执行交给 CPA 判断" : a.status && a.status.toLowerCase() !== "active" ? "状态：" + a.status + "，执行交给 CPA 判断" : "启用 · 可选择预热";
+    input.addEventListener("change", () => { if (input.checked) selected.add(a.id); else selected.delete(a.id); renderControls(); });
+    text.append(note); label.append(input, text); $("accounts").append(label);
+  });
+  renderControls();
+}
+function filteredLogs() {
+  const text = $("logSearch").value.trim().toLowerCase(), level = $("logLevel").value;
+  return logEntries.slice().reverse().filter(e => (!level || e.level === level) && (!text || JSON.stringify([e, eventNames[e.event]]).toLowerCase().includes(text)));
+}
+function renderLogs() {
+  const rows = filteredLogs(), timezone = currentStatus?.configuration.timezone || "Asia/Singapore";
+  $("logCount").textContent = rows.length + " / " + logEntries.length + " 条";
+  $("logLimit").textContent = ($("logDay").value ? "UTC " + $("logDay").value + " 归档" : "最近 " + (currentStatus?.configuration.max_log_entries || 200) + " 条") + " · 最新在前" + (rows.length > 500 ? " · 显示前 500 条，可筛选或导出全部" : "");
+  $("exportLogs").disabled = !rows.length;
+  const signature = JSON.stringify([rows, timezone]);
+  if (signature === logsSignature) return;
+  logsSignature = signature;
+  const open = new Set([...$("logs").querySelectorAll("tr")].filter(tr => tr.querySelector("details[open]")).map(tr => tr.dataset.key)), scrollTop = $("logs").scrollTop;
+  const visible = rows.slice(0, 500), keys = visible.map(e => JSON.stringify([e.time, e.event, e.fields?.auth_id, e.fields?.run_id]));
+  table("logs", ["时间", "级别", "事件", "账号", "说明", "详情"], visible.map(e => {
+    const fields = {"事件代码": e.event};
+    for (const [key, value] of Object.entries(e.fields || {})) fields[fieldNames[key] || key] = key === "source" ? sourceName(value) : value;
+    return [formatTime(e.time, timezone), e.level, eventNames[e.event] || e.event, e.fields?.label || e.fields?.auth_id || "—", e.message, expandable(JSON.stringify(fields, null, 2), "查看详情")];
+  }), keys);
+  for (const tr of $("logs").querySelectorAll("tr")) if (open.has(tr.dataset.key)) tr.querySelectorAll("details").forEach(node => { node.open = true; });
+  $("logs").scrollTop = scrollTop;
+}
+function addSchedule(schedule = {id: "", at: "05:00", enabled: true}) {
+  const row = document.createElement("div"); row.className = "schedule";
+  for (const [name, label, type, value] of [["id", "日程名称", "text", schedule.id], ["at", "时间", "time", schedule.at]]) {
+    const wrapper = document.createElement("label"), input = document.createElement("input"); wrapper.append(document.createTextNode(label)); input.dataset.field = name; input.name = "schedule_" + name; input.type = type; input.value = value; input.required = true; wrapper.append(input); row.append(wrapper);
+  }
+  const label = document.createElement("label"), enabled = document.createElement("input"); label.className = "check"; enabled.type = "checkbox"; enabled.dataset.field = "enabled"; enabled.checked = schedule.enabled !== false; label.append(enabled, document.createTextNode("启用")); row.append(label);
+  const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "删除"; remove.addEventListener("click", () => { row.remove(); markDirty(); }); row.append(remove); $("schedules").append(row);
+}
+function fillConfig(cfg, fallback) {
+  configuration = cfg;
+  if (settingsDirty) return;
+  const values = {...fallback, ...cfg};
+  for (const name of ["model", "prompt", "timezone"]) $(name).value = values[name];
+  $("maxLogs").value = values.max_log_entries; $("stateFile").value = values.state_file;
+  $("retentionDays").value = values.history_retention_days ?? 30;
+  $("webhookURL").value = values.notify_webhook_url || ""; $("barkURL").value = values.notify_bark_url || "";
+  $("schedules").replaceChildren(); (values.schedules || []).forEach(addSchedule);
+}
+function validateConfig(cfg) {
+  if (!cfg.model || !cfg.prompt || !cfg.state_file) throw new Error("模型、发送内容和历史路径不能为空");
+  try { new Intl.DateTimeFormat("zh-CN", {timeZone: cfg.timezone}); } catch (_) { throw new Error("请输入有效的 IANA 时区，例如 Asia/Singapore"); }
+  if (!Number.isInteger(cfg.max_log_entries) || cfg.max_log_entries < 1 || cfg.max_log_entries > 2000) throw new Error("保留日志数必须是 1–2000 的整数");
+  if (!Number.isInteger(cfg.history_retention_days) || cfg.history_retention_days < 1 || cfg.history_retention_days > 365) throw new Error("归档保留天数必须是 1–365 的整数");
+  for (const value of [cfg.notify_webhook_url, cfg.notify_bark_url]) {
+    if (!value) continue;
+    let url;
+    try { url = new URL(value); } catch (_) { throw new Error("通知地址必须是有效的 HTTP(S) URL"); }
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.hash) throw new Error("通知地址不能含用户名密码或片段，且必须使用 HTTP(S)");
+  }
+  const ids = new Set(), times = new Set();
+  for (const schedule of cfg.schedules) {
+    if (!schedule.id || ids.has(schedule.id)) throw new Error("每个日程需要唯一且非空的名称");
+    ids.add(schedule.id);
+    if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(schedule.at)) throw new Error("时间必须是 HH:MM 格式");
+    if (schedule.enabled && times.has(schedule.at)) throw new Error("启用的日程时间不能重复");
+    if (schedule.enabled) times.add(schedule.at);
+  }
+}
+function markDirty() { settingsDirty = true; $("saveHint").textContent = "有未保存的更改"; }
+$("settings").addEventListener("input", markDirty); $("settings").addEventListener("change", markDirty);
+function schedulePoll(delay = currentStatus?.running ? 1000 : 15000) {
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(() => { if (document.hidden) { schedulePoll(15000); return; } void refreshStatus().catch(() => {}); }, delay);
+}
+async function refreshStatus() {
+  if (statusRequest) return statusRequest;
+  statusRequest = (async () => {
+    try {
+      const data = await request(base + "/status"), wasRunning = currentStatus?.running;
+      connected = true; $("connectionState").textContent = "已连接 CPA"; renderStatus(data);
+      if (wasRunning && !data.running && data.history.last_progress) {
+        const p = data.history.last_progress; notice(p.error || "本轮结束：" + p.succeeded + " 成功、" + p.failed + " 失败、" + p.skipped + " 未发送。", !!p.error || p.failed > 0);
+      }
+      if (!$("logDay").value) { logEntries = data.history.logs || []; renderLogs(); }
+      schedulePoll();
+    } catch (error) {
+      connected = false; renderControls(); $("connectionState").textContent = "连接异常"; notice(error.message, true);
+      if (error.status !== 401 && error.status !== 403) schedulePoll(5000);
+      else { clearTimeout(pollTimer); $("connection").open = true; }
+      throw error;
+    } finally { statusRequest = null; }
+  })();
+  return statusRequest;
+}
+async function loadAll() {
+  const day = $("logDay").value;
+  const [data, cfg, listed, logs] = await Promise.all([request(base + "/status"), request(base + "/config"), request(base + "/accounts"), request(base + "/logs" + (day ? "?day=" + encodeURIComponent(day) : ""))]);
+  connected = true; renderStatus(data); fillConfig(cfg, data.configuration);
+  accounts = listed.accounts || []; logEntries = logs.logs || []; renderAccounts(); renderLogs();
+  $("connectionState").textContent = "已连接 CPA"; $("settingsFields").disabled = false; $("refresh").disabled = false;
+  document.querySelectorAll("[data-needs-connection]").forEach(node => { node.hidden = true; }); schedulePoll();
+}
+async function action(button, message, fn) {
+  button.disabled = true; notice(message);
+  try { await fn(); } catch (error) { notice(error.message, true); }
+  finally { button.disabled = false; renderControls(); }
+}
+async function connect() { await loadAll(); $("connection").open = false; notice("已连接，运行状态与日志会自动刷新。"); }
+$("connectionForm").addEventListener("submit", event => { event.preventDefault(); void action($("load"), "正在连接并读取…", connect); });
+$("refresh").addEventListener("click", () => action($("refresh"), "正在刷新…", async () => { await loadAll(); notice(settingsDirty ? "状态已刷新，未保存的配置仍保留。" : "账号、状态与日志已更新。"); }));
+$("add").addEventListener("click", () => { addSchedule(); markDirty(); });
+$("settings").addEventListener("submit", event => {
+  event.preventDefault();
+  action($("save"), "正在保存…", async () => {
+    if (!configuration) throw new Error("请先读取配置");
+    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), notify_webhook_url: $("webhookURL").value.trim(), notify_bark_url: $("barkURL").value.trim()};
+    cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
+    validateConfig(cfg);
+    await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
+    configuration = cfg; settingsDirty = false; $("saveHint").textContent = "配置已保存。";
+    await refreshStatus(); notice("配置已保存并应用。");
+  });
+});
+async function startManual(authIDs) {
+  if (submitting || !connected || currentStatus?.running) return;
+  const selection = authIDs ? [...authIDs].sort() : null;
+  if (pendingRun && JSON.stringify(pendingRun.auth_ids) !== JSON.stringify(selection)) { notice("上次启动结果未确认，请先刷新状态或重查同一账号选择。", true); return; }
+  if (!pendingRun) pendingRun = {request_id: [...crypto.getRandomValues(new Uint8Array(16))].map(n => n.toString(16).padStart(2, "0")).join(""), auth_ids: selection, async: true};
+  submitting = true; renderControls(); notice("正在提交预热任务…");
+  try {
+    const data = await request(base + "/run", {method: "POST", body: JSON.stringify(pendingRun)});
+    pendingRun = null; renderStatus(data.status); notice(data.duplicate ? "已找到同一请求的执行记录，没有重复发送。" : "任务已提交，可查看进度或停止剩余队列。"); schedulePoll(100);
+  } catch (error) {
+    if (error.status >= 400 && error.status < 500) pendingRun = null;
+    notice(error.message + " 启动结果以 CPA 状态为准；未确认时再次执行同一选择会复用请求 ID，不自动重发。", true);
+  } finally { submitting = false; renderControls(); }
+}
+$("run").addEventListener("click", () => startManual());
+$("runSelected").addEventListener("click", () => startManual([...selected]));
+$("stopRun").addEventListener("click", () => action($("stopRun"), "正在停止剩余队列…", async () => {
+  const data = await request(base + "/stop", {method: "POST", body: JSON.stringify({run_id: currentStatus.history.last_progress.id})});
+  renderStatus(data.status); notice("当前请求继续由 CPA 处理，结束后跳过剩余账号。"); schedulePoll(100);
+}));
+$("selectAll").addEventListener("click", () => { for (const a of accounts) if (!a.disabled && a.id?.trim()) selected.add(a.id); renderAccounts(); });
+$("clearSelection").addEventListener("click", () => { selected.clear(); renderAccounts(); });
+$("logSearch").addEventListener("input", renderLogs); $("logLevel").addEventListener("change", renderLogs);
+$("logDay").addEventListener("change", () => action($("refresh"), "正在读取日志…", async () => {
+  const day = $("logDay").value, data = await request(base + "/logs" + (day ? "?day=" + encodeURIComponent(day) : ""));
+  if ($("logDay").value === day) { logEntries = data.logs || []; renderLogs(); notice(day ? "已读取 UTC " + day + " 的归档。" : "已返回最近日志。"); }
+}));
+$("exportLogs").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(filteredLogs(), null, 2)], {type: "application/json"}), url = URL.createObjectURL(blob), link = document.createElement("a");
+  link.href = url; link.download = "codex-5h-reset-" + ($("logDay").value || "recent") + ".json"; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+function applyTheme() {
+  let theme = "", root;
+  try {
+    if (window.parent !== window) { root = window.parent.document.documentElement; theme = root.getAttribute("data-theme") || ""; }
+    if (!root) { const saved = JSON.parse(localStorage.getItem("cli-proxy-theme") || "null"); theme = saved?.state?.theme || saved?.theme || ""; }
+  } catch (_) { /* 跨域或无宿主主题时跟随系统。 */ }
+  if (theme === "dark") document.documentElement.dataset.theme = "dark";
+  else if (theme === "light" || theme === "white") document.documentElement.dataset.theme = "light";
+  else document.documentElement.removeAttribute("data-theme");
+  return root;
+}
+const parentRoot = applyTheme();
+if (parentRoot) new MutationObserver(applyTheme).observe(parentRoot, {attributes: true, attributeFilter: ["data-theme"]});
+window.addEventListener("storage", event => { if (event.key === "cli-proxy-theme") applyTheme(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden && connected) { clearTimeout(pollTimer); void refreshStatus().catch(() => {}); } });
+window.addEventListener("pagehide", () => clearTimeout(pollTimer));
+if ($("key").value.trim()) void action($("load"), "正在自动连接…", connect);
+</script>
+</body>
+</html>

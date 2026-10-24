@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "plugins": [
+    {
+      "id": "codex-5h-reset",
+      "name": "Codex 5H Reset",
+      "description": "按每日计划逐账号发送 Codex 预热消息，保持 Five-Hour Quota Warmer 的请求与成功判定。",
+      "author": "howiepu",
+      "repository": "https://github.com/howiepu/codex-5h-reset"
+    }
+  ]
+}

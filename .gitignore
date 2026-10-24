@@ -1,0 +1,5 @@
+/dist/
+/plugins/
+*.test
+.DS_Store
+__pycache__/
