@@ -11,12 +11,13 @@ import (
 )
 
 type history struct {
-	SchemaVersion int          `json:"schema_version"`
-	LastRun       *time.Time   `json:"last_run,omitempty"`
-	LastSource    string       `json:"last_source,omitempty"`
-	LastResults   []result     `json:"last_results"`
-	LastProgress  *runProgress `json:"last_progress,omitempty"`
-	Logs          []logEntry   `json:"logs"`
+	SchemaVersion int             `json:"schema_version"`
+	LastRun       *time.Time      `json:"last_run,omitempty"`
+	LastSource    string          `json:"last_source,omitempty"`
+	LastResults   []result        `json:"last_results"`
+	LastProgress  *runProgress    `json:"last_progress,omitempty"`
+	Logs          []logEntry      `json:"logs"`
+	TokenRefresh  *refreshJournal `json:"token_refresh,omitempty"`
 }
 
 func loadHistory(path string) (history, error) {
@@ -59,7 +60,11 @@ func loadHistory(path string) (history, error) {
 }
 
 func saveHistory(path string, h history) error {
-	raw, err := json.Marshal(h)
+	return writePrivateJSON(path, h)
+}
+
+func writePrivateJSON(path string, value any) error {
+	raw, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}

@@ -40,6 +40,8 @@ try:
     with urlopen(base + "/v0/resource/plugins/codex-5h-reset/status", timeout=2) as response:
         assert response.status == 200 and b"<html" in response.read()
     _, config = call("/config")
+    _, plan = call("/token-refresh")
+    assert not plan["enabled"] and plan["lead_hours"] == 120 and len(plan["accounts"]) == 3
     _, tested = call("/test-notification", {key: value for key, value in config.items() if key.startswith("notify_")})
     assert tested["results"] == [{"channel": "Webhook", "success": True}], tested
     _, untouched = call("/status")
@@ -73,7 +75,29 @@ try:
     assert duplicate["duplicate"] and duplicate["progress"]["id"] == started["progress"]["id"]
     _, archived = call("/logs?day=" + datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     assert archived["logs"], archived
-    print("UI 服务验证通过：自定义通知本地投递、空闲连接、同步/异步接口、柔性停止、去重与日期归档。")
+    with urlopen(Request(base + "/v8/management/config/server", headers=headers), timeout=2) as response:
+        assert json.load(response)["port"] == port
+    _, cached = call("/connection", {"url": base})
+    assert cached["cached"]
+    assert Path(config["state_file"] + ".connection.json").stat().st_mode & 0o777 == 0o600
+    config.update(token_refresh_enabled=True)
+    request = Request(api + "/config", data=json.dumps(config).encode(), headers=headers, method="PUT")
+    with urlopen(request, timeout=2) as response:
+        assert response.status == 200
+    deadline = time.monotonic() + 3
+    while time.monotonic() < deadline:
+        _, plan = call("/token-refresh")
+        if any(row.get("last_result") == "success" for row in plan["accounts"]):
+            break
+        time.sleep(0.02)
+    else:
+        raise AssertionError("未观察到模拟 CPA 完成令牌刷新")
+    assert plan["next_at"] and all(row["state"] == "scheduled" for row in plan["accounts"] if row["id"] != "disabled")
+    assert "fake-access" not in json.dumps(plan) and "test-management-key" not in json.dumps(plan)
+    _, status = call("/status")
+    assert "token_refresh_management_key" not in status["configuration"] and "token_refresh" not in status["history"]
+    assert status["connection"]["cached"] and "test-management-key" not in json.dumps(status)
+    print("UI 服务验证通过：通知、预热与归档，以及后台串行调用模拟 CPA 刷新并重新排期。")
 finally:
     if idle:
         idle.close()

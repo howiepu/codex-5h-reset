@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -28,6 +29,9 @@ type authEntry struct {
 	Unavailable bool     `json:"unavailable"`
 	Status      string   `json:"status"`
 	Models      []string `json:"models"`
+	AuthIndex   string   `json:"auth_index,omitempty"`
+	Name        string   `json:"name,omitempty"`
+	RuntimeOnly bool     `json:"runtime_only,omitempty"`
 }
 
 type modelRequest struct {
@@ -68,38 +72,43 @@ type logEntry struct {
 }
 
 type status struct {
-	Plugin        string       `json:"plugin"`
-	Version       string       `json:"version"`
-	Running       bool         `json:"running"`
-	Configuration config       `json:"configuration"`
-	Schedules     []plannedRun `json:"schedules"`
-	History       history      `json:"history"`
-	StateError    string       `json:"state_error,omitempty"`
-	ArchiveError  string       `json:"archive_error,omitempty"`
+	Plugin        string          `json:"plugin"`
+	Version       string          `json:"version"`
+	Running       bool            `json:"running"`
+	Configuration config          `json:"configuration"`
+	Schedules     []plannedRun    `json:"schedules"`
+	History       history         `json:"history"`
+	StateError    string          `json:"state_error,omitempty"`
+	ArchiveError  string          `json:"archive_error,omitempty"`
+	Connection    connectionState `json:"connection"`
 }
 
 type warmer struct {
-	lifecycle    sync.Mutex
-	mu           sync.Mutex
-	host         hostFunc
-	cfg          config
-	initialized  bool
-	accepting    bool
-	running      bool
-	stop         chan struct{}
-	done         chan struct{}
-	runs         sync.WaitGroup
-	history      history
-	stateError   string
-	stateLocked  bool
-	active       *runJob
-	receipts     []*runJob
-	archiveError string
-	archiveDay   string
+	lifecycle     sync.Mutex
+	mu            sync.Mutex
+	host          hostFunc
+	cfg           config
+	initialized   bool
+	accepting     bool
+	running       bool
+	stop          chan struct{}
+	done          chan struct{}
+	runs          sync.WaitGroup
+	history       history
+	stateError    string
+	stateLocked   bool
+	active        *runJob
+	receipts      []*runJob
+	archiveError  string
+	archiveDay    string
+	refreshCancel context.CancelFunc
+	refreshDone   chan struct{}
+	refreshActive string
+	refreshWake   chan struct{}
 }
 
 func newWarmer(host hostFunc) *warmer {
-	return &warmer{host: host, cfg: defaultConfig(), history: history{SchemaVersion: 1}}
+	return &warmer{host: host, cfg: defaultConfig(), history: history{SchemaVersion: 1}, refreshWake: make(chan struct{}, 1)}
 }
 
 func (w *warmer) Configure(cfg config) {
@@ -120,6 +129,9 @@ func (w *warmer) Configure(cfg config) {
 			w.stateError = "历史文件读取失败，已保留原件；请检查 state_file"
 		}
 	}
+	if w.initialized && !w.cfg.TokenRefreshEnabled && cfg.TokenRefreshEnabled && w.history.TokenRefresh != nil {
+		w.history.TokenRefresh.Hold = ""
+	}
 	w.cfg, w.initialized, w.accepting = cfg, true, cfg.Enabled
 	w.archiveDay = ""
 	w.trimLogsLocked()
@@ -127,10 +139,19 @@ func (w *warmer) Configure(cfg config) {
 		w.stop, w.done = make(chan struct{}), make(chan struct{})
 	}
 	stop, done := w.stop, w.done
+	var refreshCtx context.Context
+	if cfg.Enabled && cfg.TokenRefreshEnabled {
+		refreshCtx, w.refreshCancel = context.WithCancel(context.Background())
+		w.refreshDone = make(chan struct{})
+	}
+	refreshDone := w.refreshDone
 	w.mu.Unlock()
 	w.log("info", "configuration.updated", "插件配置已加载", nil)
 	if cfg.Enabled {
 		go w.scheduleLoop(cfg, stop, done)
+	}
+	if refreshCtx != nil {
+		go w.tokenRefreshLoop(refreshCtx, cfg, refreshDone)
 	}
 }
 
@@ -147,13 +168,21 @@ func (w *warmer) stopLocked() {
 		w.active.progress.StopRequested = true
 	}
 	stop, done := w.stop, w.done
+	cancelRefresh, refreshDone := w.refreshCancel, w.refreshDone
+	w.refreshCancel, w.refreshDone = nil, nil
 	w.stop, w.done = nil, nil
 	w.mu.Unlock()
+	if cancelRefresh != nil {
+		cancelRefresh()
+	}
 	if stop != nil {
 		close(stop)
 	}
 	if done != nil {
 		<-done
+	}
+	if refreshDone != nil {
+		<-refreshDone
 	}
 	w.runs.Wait()
 }
@@ -260,15 +289,17 @@ func (w *warmer) Status() status {
 	cfg.NotifyWebhookURL, cfg.NotifyBarkURL = "", ""
 	cfg.NotifyWebhookUsername, cfg.NotifyWebhookPassword = "", ""
 	cfg.NotifyWebhookHeaders, cfg.NotifyWebhookBody = nil, ""
+	cfg.TokenRefreshKey, cfg.TokenRefreshURL = "", ""
 	cfg.Schedules = append([]schedule{}, cfg.Schedules...)
 	h := w.history
+	h.TokenRefresh = nil
 	h.LastResults = append([]result{}, h.LastResults...)
 	h.Logs = append([]logEntry{}, h.Logs...)
 	if h.LastProgress != nil {
 		p := *h.LastProgress
 		h.LastProgress = &p
 	}
-	return status{Plugin: pluginID, Version: version, Running: w.running, Configuration: cfg, Schedules: nextRuns(cfg, time.Now()), History: h, StateError: w.stateError, ArchiveError: w.archiveError}
+	return status{Plugin: pluginID, Version: version, Running: w.running, Configuration: cfg, Schedules: nextRuns(cfg, time.Now()), History: h, StateError: w.stateError, ArchiveError: w.archiveError, Connection: cachedConnectionState(cfg.StateFile)}
 }
 
 func (w *warmer) log(level, event, message string, fields map[string]any) {

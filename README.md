@@ -14,16 +14,17 @@
 | --- | --- |
 | 消息模式 | 固定消息、随机算术题二选一；随机模式使用 Responses Lite 请求参数，保留固定消息草稿。 |
 | 执行控制 | 勾选账号预热、异步进度、请求耗时、柔性停止；本进程最近 64 个请求 ID 去重。 |
+| 令牌刷新 | 独立页签展示到期时间和下次刷新；默认提前 5 天，可自定义天数或小时，后台串行调用 CPA 原生刷新接口。 |
 | 日志增强 | 按 UTC 日期归档、配置保留天数、关键词与级别筛选、导出、长文本展开。 |
 | 异常通知 | Webhook / Bark 失败汇总、定时任务无可用账号告警、测试通知。Webhook 支持自定义方法、请求头和模板。 |
 | 模型提示 | 展示已启用账号的注册模型及当前模型注册情况，不额外发送模型探测请求。 |
 | 管理界面 | 中文顶部菜单、默认查看日志、深浅主题和窄屏适配；刷新保留未保存的设置，鉴权失败停止轮询。 |
 
-执行规则：启动不补发错过的计划；同一时间只运行一轮；每个目标账号只提交一次请求，插件不自动重试或替换模型，CPA 自身执行规则仍然生效。“停止本轮”会等待当前请求结束，再跳过剩余账号。HTTP 2xx 只表示请求成功，不验证算术答案或额度是否重置。
+预热执行规则：启动不补发错过的计划；同一时间只运行一轮；每个目标账号只提交一次请求，插件不自动重试或替换模型，CPA 自身执行规则仍然生效。“停止本轮”会等待当前请求结束，再跳过剩余账号。HTTP 2xx 只表示请求成功，不验证算术答案或额度是否重置。
 
 ## 安装与使用
 
-已在 **CPA v8.0.41** 验证；当前 [Release](https://github.com/howiepu/codex-5h-reset/releases) 提供 **Linux amd64** 安装包。
+运行于 CPA 插件宿主，令牌刷新接口按 **CPA v8.0.43** 核对；当前 [Release](https://github.com/howiepu/codex-5h-reset/releases) 提供 **Linux amd64** 安装包。
 
 1. 在 CPA 插件商店添加自定义源：
 
@@ -44,7 +45,17 @@
 3. 打开 `/v0/resource/plugins/codex-5h-reset/status`，输入 CPA 管理密钥。
 4. 在“预热设置”中选择可用的 ChatGPT / Codex 模型、消息模式、时区和每日时刻，点击“保存配置”。完整示例见 [config.example.yaml](config.example.yaml)。
 
-从原 Warmer 迁移时可沿用模型、固定消息、时区和日程；不要复制原插件的 `store` 来源字段，旧插件历史不会自动导入。管理密钥默认只保存在当前标签页，勾选“记住密钥”后才存入本机浏览器。
+从原 Warmer 迁移时可沿用模型、固定消息、时区和日程；不要复制原插件的 `store` 来源字段，旧插件历史不会自动导入。“记住密钥”仅控制浏览器保存，默认只在当前标签页记住输入；后台连接另存于服务器缓存。
+
+## 令牌刷新
+
+在顶部连接设置输入一次 CPA 管理密钥，验证成功后自动读取 CPA 服务地址，并将后台连接保存到 `state_file + ".connection.json"` 缓存文件，权限为 `0600`。该文件应与历史一起放在持久目录内，不要提交到 Git；密钥不写入插件配置、历史或日志，也不会返回浏览器。
+
+在“令牌刷新”页签设置提前时长后保存启用。默认关闭、提前 **5 天**，支持天数或小时；页面顶部和账号列表展示下次刷新时间，关闭页面或重启插件后仍会运行。无法读取 CPA 服务地址或缓存不可用时暂停，页面会提示重新连接。
+
+每分钟检查一次启用的 Codex 账号，按外层 access token 到期时间排队，串行调用 CPA 的单账号刷新接口。JWT `exp` 优先于文件的 `expired`；没有有效期或外层 refresh token 的账号跳过。成功后重新排期，临时失败退避，凭据失效停止重试；管理认证失败暂停队列，在顶部重新连接后恢复。重启后先核对最新凭据，不直接重放未确认请求。
+
+该功能依赖 CPA 的 `/v0/management/auth-files/refresh`，已核对 v8.0.43 源码。CPA 自身的后台和 401 刷新仍然生效，`auth-auto-refresh-workers` 不限制插件逐账号调用的并发。
 
 ## 历史与通知
 
@@ -91,7 +102,7 @@ node scripts/ui_auth_smoke.mjs
 node scripts/ui_settings_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
-python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.4
+python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.5
 python3 scripts/ui_server_smoke.py dist/codex-5h-reset.dylib
 ```
 

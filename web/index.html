@@ -38,6 +38,7 @@
     .app { width: min(1120px, 100%); min-width: 0; margin: auto; }
     .skip-link { position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 12px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); transform: translateY(-150%); }
     .skip-link:focus { transform: translateY(0); }
+    .skip-link:not(:focus) { clip-path: inset(50%); }
     .app-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-bottom: 24px; border-bottom: 1px solid var(--border); }
     .brand { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; }
     .brand-mark { display: grid; place-items: center; width: 38px; height: 38px; flex: none; border-radius: 9px; background: var(--primary); color: var(--primary-foreground); }
@@ -51,8 +52,7 @@
     .connection { margin-top: 20px; border: 1px solid var(--border); border-radius: 8px; }
     .connection > summary { display: flex; align-items: center; gap: 8px; padding: 12px 16px; list-style: none; font-size: 13px; font-weight: 500; cursor: pointer; }
     .connection > summary::-webkit-details-marker { display: none; }
-    .connection-hint { margin-left: auto; font-size: 12px; color: var(--muted-foreground); font-weight: 400; }
-    .connection .chevron { margin-left: 4px; color: var(--muted-foreground); }
+    .connection .chevron { margin-left: auto; color: var(--muted-foreground); }
     .connection[open] .chevron { transform: rotate(180deg); }
     .connection-form { padding: 0 16px 16px; }
     .row { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
@@ -77,12 +77,10 @@
     .menu button:hover { color: var(--foreground); }
     .menu button[aria-current=page] { background: var(--background); color: var(--foreground); box-shadow: 0 1px 3px #00000012; }
     .page-heading { padding: 28px 0 20px; min-width: 0; }
-    .page-heading p { margin-top: 7px; font-size: 13px; color: var(--muted-foreground); overflow-wrap: anywhere; }
     .view, .card { min-width: 0; max-width: 100%; }
     .card { border: 1px solid var(--border); border-radius: 8px; overflow: clip; }
     .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 16px 18px; border-bottom: 1px solid var(--border); }
     .card-title { display: flex; align-items: center; gap: 8px; }
-    .card-header p { margin-top: 3px; font-size: 12px; color: var(--muted-foreground); }
     .card-body { padding: 20px; }
     .empty { padding: 54px 20px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
     .table-wrap { width: 100%; max-width: 100%; min-width: 0; max-height: 62vh; overflow: auto; overscroll-behavior: contain; }
@@ -141,6 +139,11 @@
     .toolbar label { margin: 0; flex: 1 1 140px; min-width: 0; }
     .toolbar input, .toolbar select { display: block; margin-top: 6px; height: 36px; }
     .view > .card + .card { margin-top: 16px; }
+    .refresh-summary { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 20px; padding: 20px; }
+    .refresh-summary strong { display: block; margin: 7px 0 4px; font-size: 20px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
+    .duration-input { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; max-width: 360px; }
+    .duration-input select { height: 36px; }
+    #tokenRefreshError { margin: 0 20px 20px; }
     #runProgress { margin: 0 0 18px; padding: 14px 18px; overflow-wrap: anywhere; }
     #runProgress .row { align-items: center; justify-content: space-between; }
     progress { display: block; width: 100%; height: 8px; margin: 12px 0; accent-color: var(--primary); }
@@ -149,7 +152,6 @@
     .account-list input { flex: none; margin-top: 3px; }
     .account-list span { min-width: 0; }
     .account-list small { display: block; margin-top: 4px; }
-    footer { margin-top: 20px; padding-bottom: 8px; color: var(--muted-foreground); font-size: 11px; overflow-wrap: anywhere; }
     [hidden] { display: none !important; }
     @media (max-width: 680px) {
       body { padding: 20px 16px; }
@@ -157,12 +159,12 @@
       .header-actions .badge { margin-right: auto; }
       .menu { display: flex; width: 100%; }
       .menu button { flex: 1 0 calc(50% - 4px); }
-      .connection-hint { display: none; }
-      .connection .chevron { margin-left: auto; }
       .page-heading { padding: 24px 0 16px; }
       h1 { font-size: 23px; }
       .settings-section { padding: 20px 16px; }
       .grid, .mode-switch { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+      .refresh-summary { grid-template-columns: minmax(0, 1fr); padding: 20px 16px; }
+      #tokenRefreshError { margin: 0 16px 16px; }
       .notification-channel { padding: 16px; }
       .webhook-target { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .webhook-url { grid-column: 1 / -1; }
@@ -199,32 +201,48 @@
     </div>
   </header>
   <details id="connection" class="connection" open>
-    <summary><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M9 8H6a4 4 0 0 0 0 8h3m6-8h3a4 4 0 0 1 0 8h-3"/></svg>连接设置<span class="connection-hint">使用 CPA 管理密钥连接</span><svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
+    <summary><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M9 8H6a4 4 0 0 0 0 8h3m6-8h3a4 4 0 0 1 0 8h-3"/></svg>连接设置<svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></summary>
     <form id="connectionForm" class="connection-form" autocomplete="off">
       <div class="row"><div class="grow"><label for="key">CPA 管理密钥</label><input id="key" name="management-key" type="password" autocomplete="off" spellcheck="false"></div><button id="load" class="primary" type="submit">连接并读取</button></div>
       <label class="check"><input id="remember" name="remember_key" type="checkbox">在此浏览器中记住密钥</label>
-      <small>默认仅在当前标签页保存；勾选后保存到本机浏览器。</small>
+      <small id="connectionCacheState" role="status">连接后自动缓存后台凭据</small>
     </form>
   </details>
-  <div id="notice" role="status" aria-live="polite">连接 CPA 后即可读取日志、管理计划与手动预热。</div>
+  <div id="notice" role="status" aria-live="polite">请先连接 CPA</div>
   <section id="runProgress" class="card" aria-label="本轮进度" hidden><div class="row"><strong id="progressTitle">本轮进度</strong><span id="progressCount" class="badge"></span></div><progress id="progressBar" aria-label="已完成账号数量" max="1" value="0"></progress><p id="progressMessage" class="muted"></p></section>
   <nav class="menu" aria-label="插件菜单">
     <button id="tab-logs" type="button" data-view="logs" aria-controls="view-logs" aria-current="page"><svg aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h8m-8 4h5"/></svg>运行日志</button>
     <button id="tab-status" type="button" data-view="status" aria-controls="view-status"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>运行状态</button>
     <button id="tab-results" type="button" data-view="results" aria-controls="view-results"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-17a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4v2"/></svg>账号结果</button>
+    <button id="tab-tokens" type="button" data-view="tokens" aria-controls="view-tokens"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>令牌刷新</button>
     <button id="tab-settings" type="button" data-view="settings" aria-controls="view-settings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>预热设置</button>
   </nav>
-  <div class="page-heading"><h1 id="viewTitle" tabindex="-1">运行日志</h1><p id="viewDescription">查看每次触发和账号请求的记录，最新事件显示在前。</p></div>
+  <div class="page-heading"><h1 id="viewTitle" tabindex="-1">运行日志</h1></div>
   <p id="storageError" role="alert" hidden></p>
   <section id="view-logs" class="view" data-view-panel="logs" aria-labelledby="tab-logs">
-    <div class="card"><div class="card-header"><div class="card-title"><h2>事件记录</h2><span id="logCount" class="badge">0 条</span></div><small id="logLimit">最新在前</small></div><div class="toolbar"><label for="logSearch">搜索账号、事件或轮次<input id="logSearch" type="search" placeholder="输入关键词…"></label><label for="logLevel">日志级别<select id="logLevel"><option value="">全部</option><option value="warn">警告</option><option value="error">错误</option><option value="info">信息</option></select></label><label for="logDay">归档日期（UTC，可清空）<input id="logDay" type="date"></label><button id="exportLogs" type="button" disabled>导出筛选结果</button></div><div id="logs" class="table-wrap"><p class="empty">连接 CPA 后查看运行日志。</p></div></div>
+    <div class="card"><div class="card-header"><div class="card-title"><h2>事件记录</h2><span id="logCount" class="badge">0 条</span></div><small id="logLimit">最新在前</small></div><div class="toolbar"><label for="logSearch">搜索<input id="logSearch" type="search" placeholder="账号、事件、轮次…"></label><label for="logLevel">日志级别<select id="logLevel"><option value="">全部</option><option value="warn">警告</option><option value="error">错误</option><option value="info">信息</option></select></label><label for="logDay">归档日期 · UTC<input id="logDay" type="date" title="留空查看最近日志"></label><button id="exportLogs" type="button" disabled>导出筛选结果</button></div><div id="logs" class="table-wrap"><p class="empty">连接后查看日志</p></div></div>
   </section>
   <section id="view-status" class="view" data-view-panel="status" aria-labelledby="tab-status" hidden>
-    <div class="card"><div class="card-header"><div><h2>预热概况</h2><p>每日计划、最近运行与当前执行状态。</p></div></div><div class="card-body"><p class="muted" data-needs-connection>连接 CPA 后查看运行状态。</p><dl id="status"></dl></div></div>
+    <div class="card"><div class="card-header"><h2>预热概况</h2></div><div class="card-body"><p class="muted" data-needs-connection>连接后查看状态</p><dl id="status"></dl></div></div>
   </section>
   <section id="view-results" class="view" data-view-panel="results" aria-labelledby="tab-results" hidden>
-    <div class="card"><div class="card-header"><div><h2>手动选择账号</h2><p>定时计划始终执行全部启用账号；不可用与冷却状态交给 CPA 判断。</p></div><span id="selectionCount" class="badge">未加载</span></div><div class="toolbar"><button id="selectAll" type="button" disabled>全选可执行账号</button><button id="clearSelection" type="button" disabled>清空选择</button><button id="runSelected" class="primary" type="button" disabled>预热选中账号</button></div><fieldset id="accountChoices" disabled><div id="accounts" class="account-list"><p class="muted">连接 CPA 后加载账号。</p></div></fieldset></div>
-    <div class="card"><div class="card-header"><div><h2>最近一轮账号结果</h2><p>每个启用账号依次请求一次；HTTP 2xx 记为成功。</p></div></div><div id="results" class="table-wrap"><p class="empty">连接 CPA 后查看账号结果。</p></div></div>
+    <div class="card"><div class="card-header"><h2>手动选择账号</h2><span id="selectionCount" class="badge">未加载</span></div><div class="toolbar"><button id="selectAll" type="button" disabled>全选可执行账号</button><button id="clearSelection" type="button" disabled>清空选择</button><button id="runSelected" class="primary" type="button" disabled>预热选中账号</button></div><fieldset id="accountChoices" disabled><div id="accounts" class="account-list"><p class="muted">连接后加载账号</p></div></fieldset></div>
+    <div class="card"><div class="card-header"><h2>最近一轮账号结果</h2></div><div id="results" class="table-wrap"><p class="empty">连接后查看结果</p></div></div>
+  </section>
+  <section id="view-tokens" class="view" data-view-panel="tokens" aria-labelledby="tab-tokens" hidden>
+    <div class="card">
+      <div class="card-header"><div><h2>刷新计划</h2></div><span id="tokenQueueState" class="badge">未连接</span></div>
+      <div class="refresh-summary"><div><small>下次账号刷新</small><strong id="nextTokenRefresh">—</strong><small id="nextTokenAccount"></small></div><div><small>执行方式</small><strong>逐账号 · 串行</strong><small id="tokenScanTime">每分钟检查</small></div></div>
+      <p id="tokenRefreshError" class="notification-feedback error" role="alert" hidden></p>
+      <div id="tokenRefreshAccounts" class="table-wrap"><p class="empty">连接后查看刷新计划</p></div>
+    </div>
+    <form id="tokenRefreshSettings" class="card" autocomplete="off"><fieldset id="tokenRefreshFields" disabled>
+      <section class="settings-section" aria-labelledby="tokenRefreshHeading">
+        <div class="section-heading"><div><h2 id="tokenRefreshHeading">自动刷新</h2></div><label class="check" style="margin:0"><input id="tokenRefreshEnabled" name="token_refresh_enabled" type="checkbox">启用</label></div>
+        <div class="field"><label for="tokenRefreshLead">到期前</label><div class="duration-input"><input id="tokenRefreshLead" name="token_refresh_lead" type="number" min="0.001" step="any" value="5" inputmode="decimal" required><select id="tokenRefreshUnit" aria-label="提前时长单位"><option value="24">天</option><option value="1">小时</option></select></div></div>
+      </section>
+      <div class="form-actions"><small id="tokenSaveHint">未连接</small><button id="saveTokenRefresh" class="primary" type="submit">保存刷新设置</button></div>
+    </fieldset></form>
   </section>
   <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="tab-settings" hidden>
     <form id="settings" class="card" autocomplete="off"><fieldset id="settingsFields" disabled>
@@ -246,7 +264,7 @@
       <section class="settings-section" aria-labelledby="historyHeading">
         <div class="section-heading"><div><h2 id="historyHeading">历史与归档</h2></div></div>
         <div class="grid"><div class="field"><label for="maxLogs">最近日志（条）</label><input id="maxLogs" name="max_log_entries" type="number" inputmode="numeric" min="1" max="2000" required></div><div class="field"><label for="retentionDays">归档保留（天）</label><input id="retentionDays" name="history_retention_days" type="number" min="1" max="365" inputmode="numeric" required></div></div>
-        <div class="field"><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required><small>使用 CPA 持久化目录，升级后继续保留记录。</small></div>
+        <div class="field"><label for="stateFile">历史文件路径</label><input id="stateFile" name="state_file" spellcheck="false" required><small>请使用持久化目录</small></div>
       </section>
       <section class="settings-section" aria-labelledby="notificationHeading">
         <div class="section-heading"><div><h2 id="notificationHeading">异常通知</h2></div><button id="testNotification" type="button" title="测试当前填写的配置"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4 20-7zM22 2 11 13"/></svg>测试通知</button></div>
@@ -258,10 +276,10 @@
             <div class="field"><label for="webhookFormat">Body 格式</label><select id="webhookFormat" name="notify_webhook_format"><option value="json">JSON</option><option value="form">Form · 表单</option><option value="text">Text · 纯文本</option></select></div>
           </div>
           <div class="grid">
-            <div class="field"><label for="webhookHeaders">请求头 · JSON</label><textarea id="webhookHeaders" name="notify_webhook_headers" class="code-input" rows="7" autocomplete="off" spellcheck="false" aria-describedby="webhookHeadersHint" placeholder='{"Authorization": "Basic …"}'></textarea><small id="webhookHeadersHint">认证信息填写在 Authorization 中。</small></div>
+            <div class="field"><label for="webhookHeaders">请求头 · JSON</label><textarea id="webhookHeaders" name="notify_webhook_headers" class="code-input" rows="7" autocomplete="off" spellcheck="false" placeholder='{"Authorization": "Basic …"}'></textarea></div>
             <div class="field"><label for="webhookBody">请求体模板</label><textarea id="webhookBody" name="notify_webhook_body" class="code-input" rows="7" autocomplete="off" spellcheck="false" aria-describedby="webhookBodyHint" placeholder='{"body": "{{notification}}", "format": "text"}'></textarea><small id="webhookBodyHint">留空使用默认通知内容。</small></div>
           </div>
-          <details class="template-help"><summary>模板变量</summary><p><code translate="no">{{notification}}</code> · <code translate="no">{{title}}</code> · <code translate="no">{{run_id}}</code> · <code translate="no">{{source}}</code> · <code translate="no">{{group}}</code></p><p>JSON 中的变量放在字符串引号内。Content-Type 随 Body 格式自动设置，可用请求头覆盖。</p></details>
+          <details class="template-help"><summary>模板变量</summary><p><code translate="no">{{notification}}</code> · <code translate="no">{{title}}</code> · <code translate="no">{{run_id}}</code> · <code translate="no">{{source}}</code> · <code translate="no">{{group}}</code></p><p>JSON 变量需放在引号内；Content-Type 自动设置。</p></details>
         </div>
         <div class="notification-channel"><div class="channel-heading"><h3>Bark</h3></div><div class="field"><label for="barkURL">推送地址</label><div class="secret-input"><input id="barkURL" name="notify_bark_url" type="password" autocomplete="off" spellcheck="false" placeholder="留空关闭…"><button id="barkURLToggle" type="button" aria-label="显示 Bark 地址" aria-pressed="false"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div></div>
         <p id="notificationTestResult" class="notification-feedback" role="status" aria-live="polite" hidden></p>
@@ -269,7 +287,6 @@
       <div class="form-actions"><small id="saveHint">未连接</small><button id="save" class="primary" type="submit">保存配置</button></div>
     </fieldset></form>
   </section>
-  <footer>HTTP 2xx 代表请求成功，不额外验证额度窗口。启用或停用插件请在 CPA 插件列表中操作。</footer>
 </main>
 <script>
 "use strict";
@@ -278,22 +295,27 @@ const storageKey = "codex-5h-reset.management-key";
 const $ = id => document.getElementById(id);
 let configuration = null, currentStatus = null, connected = false, submitting = false, settingsDirty = false;
 let accounts = [], logEntries = [], pollTimer, statusRequest, pendingRun, logsSignature = "", resultsSignature = "";
+let tokenSettingsDirty = false, tokenStatus = null, activeView = "logs", tokenRequest;
 const selected = new Set();
 const views = {
-  logs: ["运行日志", "查看每次触发和账号请求的记录，最新事件显示在前。"],
-  status: ["运行状态", "查看当前执行状态与按时区安排的每日计划。"],
-  results: ["账号结果", "选择手动预热的账号，查看各账号的执行进度与结果。"],
-  settings: ["预热设置", ""]
+  logs: "运行日志",
+  status: "运行状态",
+  results: "账号结果",
+  tokens: "令牌刷新",
+  settings: "预热设置"
 };
 const eventNames = {"configuration.updated": "配置加载", "schedule.planned": "计划安排", "schedule.triggered": "定时触发", "schedule.skipped": "计划跳过", "warmup.started": "开始预热", "warmup.selection": "账号选择", "warmup.no_credentials": "无可用账号", "warmup.credential_started": "账号开始", "warmup.credential": "账号结果", "warmup.finished": "本轮结束", "notification.sent": "通知已发送", "notification.failed": "通知失败"};
+Object.assign(eventNames, {"token_refresh.started": "令牌刷新", "token_refresh.success": "令牌已更新", "token_refresh.failed": "令牌刷新异常"});
 const fieldNames = {run_id: "轮次 ID", source: "触发来源", auth_id: "账号 ID", label: "账号名称", model: "模型", status_code: "HTTP 状态", success: "请求成功", duration_ms: "耗时（ms）", error_kind: "错误分类", auth_total: "凭证总数", codex_total: "Codex 账号数", selected_count: "本轮选择数", skipped_disabled: "跳过禁用数", skipped_missing_id: "跳过缺少 ID 数", reported_unavailable: "列表中 CPA 标记不可用数（可选，交 CPA 判断）", reported_inactive: "列表中 CPA 非 active 数（可选，交 CPA 判断）", credential_count: "本轮账号数", success_count: "成功数", failure_count: "失败数", skipped_count: "未发送数", schedule_id: "日程", scheduled_at: "计划时间", channel: "通知渠道"};
 function showView(view) {
+  activeView = view;
   for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
   for (const button of document.querySelectorAll("[data-view]")) {
     if (button.dataset.view === view) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   }
-  $("viewTitle").textContent = views[view][0]; $("viewDescription").textContent = views[view][1]; $("viewDescription").hidden = !views[view][1];
+  $("viewTitle").textContent = views[view];
+  if (view === "tokens" && connected) void loadTokenRefresh().catch(error => notice(error.message, true));
 }
 for (const button of document.querySelectorAll("[data-view]")) button.addEventListener("click", () => showView(button.dataset.view));
 try {
@@ -323,7 +345,7 @@ async function request(path, options = {}) {
     try { data = JSON.parse(text); } catch (_) { throw new Error("CPA 返回非 JSON 响应，HTTP " + response.status); }
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        connected = false; clearTimeout(pollTimer); renderControls(); $("connection").open = true; $("settingsFields").disabled = true;
+        connected = false; clearTimeout(pollTimer); renderControls(); $("connection").open = true; $("settingsFields").disabled = true; $("tokenRefreshFields").disabled = true;
         if (response.status === 401) {
           try { localStorage.removeItem(storageKey); sessionStorage.removeItem(storageKey); } catch (_) { /* 存储可能不可用。 */ }
         }
@@ -341,9 +363,9 @@ async function request(path, options = {}) {
 function table(target, headings, rows, keys = []) {
   const container = $(target); container.replaceChildren();
   if (!rows.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "暂无记录。"; container.append(empty); return; }
-  const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : "账号结果");
+  const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : target === "tokenRefreshAccounts" ? "账号令牌刷新计划" : "账号结果");
   const cols = document.createElement("colgroup");
-  (target === "logs" ? [15, 8, 13, 20, 29, 15] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
+  (target === "logs" ? [15, 8, 13, 20, 29, 15] : target === "tokenRefreshAccounts" ? [18, 17, 17, 12, 16, 20] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
   const head = table.createTHead().insertRow();
   headings.forEach(title => { const th = document.createElement("th"); th.scope = "col"; th.textContent = title; head.append(th); });
   const body = table.createTBody();
@@ -354,7 +376,7 @@ function table(target, headings, rows, keys = []) {
     else if (text.length > 180) content = expandable(text, text.slice(0, 72) + "…");
     else { content = document.createElement("span"); content.textContent = text; }
     td.dataset.label = headings[index]; content.classList.add("cell-content");
-    if ((target === "logs" && index === 1) || (target === "results" && index === 2)) {
+    if ((target === "logs" && index === 1) || (target === "results" && index === 2) || (target === "tokenRefreshAccounts" && index === 3)) {
       content.classList.add("badge");
       if (value === "error" || value === "失败") content.classList.add("error");
       else if (value === "warn" || value === "结果未确认") content.classList.add("warn");
@@ -387,9 +409,11 @@ function renderControls() {
   $("stopRun").hidden = !currentStatus?.running || !!p?.finished_at;
   $("stopRun").disabled = !connected || submitting || p?.stop_requested;
   $("stopRun").textContent = p?.stop_requested ? "正在停止…" : "停止本轮";
+  $("tokenRefreshFields").disabled = !connected;
 }
 function renderStatus(data) {
   currentStatus = data;
+  $("connectionCacheState").textContent = data.connection?.cached ? "后台连接已缓存" : data.connection?.error || "连接后自动缓存后台凭据";
   const cfg = data.configuration, history = data.history, p = history.last_progress;
   $("status").replaceChildren();
   const next = data.schedules.map(s => s.id + " · " + formatTime(s.time, cfg.timezone)).join("；") || "未设置启用的日程";
@@ -419,11 +443,11 @@ function renderModelHint() {
   const known = eligible.filter(a => Array.isArray(a.models));
   if (!model) { $("modelHint").textContent = "请选择或输入预热模型。"; return; }
   if (!eligible.length) { $("modelHint").textContent = "暂无可执行的 Codex 账号。"; return; }
-  if (!known.length) { $("modelHint").textContent = "CPA 暂未提供账号模型列表，模型是否可用仍交给 CPA 判断。"; return; }
+  if (!known.length) { $("modelHint").textContent = "CPA 暂未提供模型列表"; return; }
   const missing = known.filter(a => !a.models.includes(model));
-  $("modelHint").textContent = "已注册当前模型：" + (known.length - missing.length) + " / " + eligible.length + " 个可执行账号。"
-    + (eligible.length > known.length ? " " + (eligible.length - known.length) + " 个账号暂无模型列表。" : "")
-    + (missing.length ? " 未注册：" + missing.map(a => a.label || a.id).join("、") + "。模型别名及实际执行仍交给 CPA 判断。" : "");
+  $("modelHint").textContent = "已注册 " + (known.length - missing.length) + " / " + eligible.length
+    + (eligible.length > known.length ? " · " + (eligible.length - known.length) + " 个账号暂无模型列表" : "")
+    + (missing.length ? " · 未注册：" + missing.map(a => a.label || a.id).join("、") + "（支持模型别名）" : "");
 }
 function renderModelOptions() {
   const models = new Set(accounts.filter(a => !a.disabled && a.id?.trim()).flatMap(a => a.models || []));
@@ -442,7 +466,7 @@ function renderAccounts() {
     const label = document.createElement("label"), input = document.createElement("input"), text = document.createElement("span"), note = document.createElement("small");
     label.className = "check"; input.type = "checkbox"; input.checked = selected.has(a.id); input.disabled = !valid.has(a.id); input.dataset.authId = a.id || "";
     text.textContent = a.label || a.id || "缺少账号 ID";
-    note.textContent = a.disabled ? "已停用，将跳过" : !a.id?.trim() ? "缺少账号 ID，将跳过" : a.unavailable ? "CPA 标记不可用，执行交给 CPA 判断" : a.status && a.status.toLowerCase() !== "active" ? "状态：" + a.status + "，执行交给 CPA 判断" : "启用 · 可选择预热";
+    note.textContent = a.disabled ? "已停用" : !a.id?.trim() ? "缺少账号 ID" : a.unavailable ? "CPA 标记不可用" : a.status && a.status.toLowerCase() !== "active" ? "状态：" + a.status : "已启用";
     input.addEventListener("change", () => { if (input.checked) selected.add(a.id); else selected.delete(a.id); renderControls(); });
     text.append(note); label.append(input, text); $("accounts").append(label);
   });
@@ -510,6 +534,7 @@ for (const id of ["webhookURL", "barkURL"]) {
 }
 function fillConfig(cfg, fallback) {
   configuration = cfg;
+  fillTokenRefreshConfig(cfg, fallback);
   if (settingsDirty) return;
   const values = {...fallback, ...cfg};
   $("saveHint").textContent = "已保存";
@@ -530,6 +555,38 @@ function fillConfig(cfg, fallback) {
   $("webhookBody").value = values.notify_webhook_body ?? defaultWebhookBody($("webhookFormat").value);
   updateWebhookMode();
   $("schedules").replaceChildren(); (values.schedules || []).forEach(addSchedule);
+}
+function fillTokenRefreshConfig(cfg, fallback = {}) {
+  if (tokenSettingsDirty) return;
+  const values = {...fallback, ...cfg}, hours = values.token_refresh_before_hours ?? 120;
+  $("tokenRefreshEnabled").checked = values.token_refresh_enabled === true;
+  $("tokenRefreshUnit").value = hours % 24 === 0 ? "24" : "1";
+  $("tokenRefreshLead").value = hours / Number($("tokenRefreshUnit").value);
+  $("tokenSaveHint").textContent = "已保存";
+}
+function readTokenRefreshConfig() {
+  const cfg = {token_refresh_enabled: $("tokenRefreshEnabled").checked, token_refresh_before_hours: Number($("tokenRefreshLead").value) * Number($("tokenRefreshUnit").value)};
+  if (!Number.isFinite(cfg.token_refresh_before_hours) || cfg.token_refresh_before_hours < 1 / 60 || cfg.token_refresh_before_hours > 365 * 24) throw new Error("提前时长必须在 1 分钟到 365 天之间");
+  return cfg;
+}
+function renderTokenRefresh(data) {
+  tokenStatus = data;
+  const timezone = currentStatus?.configuration.timezone || "Asia/Singapore", rows = data.accounts || [];
+  const names = {scheduled: "已排期", queued: "排队中", running: "刷新中", retry: "等待重试", blocked: "已暂停", paused: "未开启", skipped: "已跳过"};
+  $("tokenQueueState").textContent = data.error ? "已暂停" : data.running ? "刷新中" : data.enabled ? "已开启" : "未开启";
+  $("tokenQueueState").className = "badge" + (data.error ? " error" : "");
+  $("nextTokenRefresh").textContent = data.error ? "已暂停" : !data.enabled ? "—" : data.next_at ? new Date(data.next_at) <= new Date() ? "排队中" : formatTime(data.next_at, timezone) : data.running ? "刷新中" : "暂无计划";
+  $("nextTokenAccount").textContent = data.next_account || "";
+  $("tokenScanTime").textContent = "每分钟检查 · " + timezone;
+  $("tokenScanTime").title = "最近读取 " + formatTime(data.scanned_at, timezone);
+  $("tokenRefreshError").textContent = data.error || ""; $("tokenRefreshError").hidden = !data.error;
+  const lastNames = {success: "成功", failed: "失败", uncertain: "结果待确认", running: "进行中", updated: "凭据已更新"};
+  table("tokenRefreshAccounts", ["账号", "令牌到期", "下次刷新", "队列状态", "最近尝试", "说明"], rows.map(row => [row.label || row.id, row.expires_at ? formatTime(row.expires_at, timezone) : "—", row.next_at ? formatTime(row.next_at, timezone) : row.state === "paused" && row.planned_at ? formatTime(row.planned_at, timezone) : "—", names[row.state] || row.state, row.last_attempt ? formatTime(row.last_attempt, timezone) : "—", row.message || row.last_error || lastNames[row.last_result] || "—"]));
+}
+async function loadTokenRefresh() {
+  if (tokenRequest) return tokenRequest;
+  tokenRequest = request(base + "/token-refresh").then(renderTokenRefresh);
+  try { await tokenRequest; } finally { tokenRequest = null; }
 }
 function readNotificationConfig() {
   let headers;
@@ -592,6 +649,7 @@ async function refreshStatus() {
         const p = data.history.last_progress; notice(p.error || "本轮结束：" + p.succeeded + " 成功、" + p.failed + " 失败、" + p.skipped + " 未发送。", !!p.error || p.failed > 0);
       }
       if (!$("logDay").value) { logEntries = data.history.logs || []; renderLogs(); }
+      if (activeView === "tokens") await loadTokenRefresh();
       schedulePoll();
     } catch (error) {
       connected = false; renderControls(); $("connectionState").textContent = "连接异常"; notice(error.message, true);
@@ -609,7 +667,8 @@ async function loadAll() {
   const [cfg, listed, logs] = await Promise.all([request(base + "/config"), request(base + "/accounts"), request(base + "/logs" + (day ? "?day=" + encodeURIComponent(day) : ""))]);
   connected = true; renderStatus(data); fillConfig(cfg, data.configuration);
   accounts = listed.accounts || []; logEntries = logs.logs || []; renderAccounts(); renderLogs();
-  $("connectionState").textContent = "已连接 CPA"; $("settingsFields").disabled = false; $("refresh").disabled = false;
+  $("connectionState").textContent = "已连接 CPA"; $("settingsFields").disabled = false; $("tokenRefreshFields").disabled = false; $("refresh").disabled = false;
+  if (activeView === "tokens") await loadTokenRefresh();
   document.querySelectorAll("[data-needs-connection]").forEach(node => { node.hidden = true; }); schedulePoll();
 }
 async function action(button, message, fn) {
@@ -617,8 +676,30 @@ async function action(button, message, fn) {
   try { await fn(); } catch (error) { notice(error.message, true); }
   finally { button.disabled = false; renderControls(); }
 }
-async function connect() { await loadAll(); $("connection").open = false; notice("已连接，运行状态与日志会自动刷新。"); }
-$("connectionForm").addEventListener("submit", event => { event.preventDefault(); void action($("load"), "正在连接并读取…", connect); });
+async function cacheCurrentConnection() {
+  const server = await request("/v8/management/config/server"), port = server.port;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("无法读取 CPA 服务端口，后台连接未缓存");
+  let host = server.host || "127.0.0.1";
+  if (host === "0.0.0.0") host = "127.0.0.1";
+  if (host === "::") host = "::1";
+  if (host.includes(":") && !host.startsWith("[")) host = "[" + host + "]";
+  const url = server.tls?.enable ? window.location.origin : "http://" + host + ":" + port;
+  await request(base + "/connection", {method: "POST", body: JSON.stringify({url})});
+  $("connectionCacheState").textContent = "后台连接已缓存";
+}
+async function connect() {
+  await loadAll();
+  try {
+    await cacheCurrentConnection();
+    if (activeView === "tokens") await loadTokenRefresh();
+    $("connection").open = false; notice("已连接");
+  } catch (error) {
+    $("connection").open = true;
+    $("connectionCacheState").textContent = "后台连接未缓存，请重新连接。";
+    notice("后台连接缓存失败：" + error.message, true);
+  }
+}
+$("connectionForm").addEventListener("submit", event => { event.preventDefault(); void action($("load"), "正在连接…", connect); });
 $("refresh").addEventListener("click", () => action($("refresh"), "正在刷新…", async () => { await loadAll(); notice(settingsDirty ? "状态已刷新，未保存的配置仍保留。" : "账号、状态与日志已更新。"); }));
 $("add").addEventListener("click", () => { addSchedule(); markDirty(); });
 $("settings").addEventListener("submit", event => {
@@ -627,6 +708,7 @@ $("settings").addEventListener("submit", event => {
     if (!configuration) throw new Error("请先读取配置");
     const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), ...readNotificationConfig()};
     delete cfg.notify_webhook_username; delete cfg.notify_webhook_password;
+    delete cfg.token_refresh_management_key; delete cfg.token_refresh_management_url;
     cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
     validateConfig(cfg);
     await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
@@ -645,6 +727,19 @@ $("testNotification").addEventListener("click", async () => {
     output.textContent = data.results.map(r => r.channel + "：" + (r.success ? "测试通知已发送" : "发送失败，" + r.error)).join("；");
   } catch (error) { output.className = "notification-feedback error"; output.textContent = error.message; }
   finally { button.disabled = false; }
+});
+function markTokenDirty() { tokenSettingsDirty = true; $("tokenSaveHint").textContent = "未保存"; }
+$("tokenRefreshSettings").addEventListener("input", markTokenDirty); $("tokenRefreshSettings").addEventListener("change", markTokenDirty);
+$("tokenRefreshSettings").addEventListener("submit", event => {
+  event.preventDefault();
+  action($("saveTokenRefresh"), "正在保存刷新设置…", async () => {
+    if (!configuration) throw new Error("请先连接并读取配置");
+    const cfg = {...configuration, ...readTokenRefreshConfig()};
+    delete cfg.token_refresh_management_key; delete cfg.token_refresh_management_url;
+    await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
+    configuration = cfg; tokenSettingsDirty = false; $("tokenSaveHint").textContent = "已保存";
+    await loadTokenRefresh(); notice(cfg.token_refresh_enabled ? "自动刷新已开启" : "自动刷新已关闭");
+  });
 });
 async function startManual(authIDs) {
   if (submitting || !connected || currentStatus?.running) return;

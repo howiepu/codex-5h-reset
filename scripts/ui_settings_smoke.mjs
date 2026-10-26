@@ -6,11 +6,11 @@ const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf
 const models = html.slice(html.indexOf("function renderModelHint()"), html.indexOf("function renderAccounts()"));
 const functions = html.slice(html.indexOf("function updatePromptMode()"), html.indexOf("function markDirty()"));
 const submit = html.slice(html.indexOf('$("settings").addEventListener("submit"'), html.indexOf("async function startManual("));
-const nodes = new Map(), saved = [], notificationRequests = [];
+const nodes = new Map(), saved = [], notificationRequests = [], refreshTables = [];
 let pending, waitNotification = Promise.resolve();
 const notificationResults = [{channel: "Webhook", success: true}, {channel: "Bark", success: false, error: "接收端返回 HTTP 401"}];
 const context = vm.createContext({
-  configuration: null, settingsDirty: false, accounts: [], base: "/plugin", URL, TextEncoder, btoa,
+  configuration: null, settingsDirty: false, tokenSettingsDirty: false, tokenStatus: null, tokenRequest: undefined, currentStatus: null, accounts: [], base: "/plugin", URL, TextEncoder, btoa,
   document: {createElement: tag => ({tagName: tag, value: ""})},
   $: id => {
     if (!nodes.has(id)) nodes.set(id, {
@@ -22,8 +22,11 @@ const context = vm.createContext({
     return nodes.get(id);
   },
   addSchedule() {}, notice() {}, refreshStatus: async () => {},
+  table: (...args) => refreshTables.push(args),
+  formatTime: value => value || "—",
   action: (_button, _message, fn) => { pending = fn(); },
   request: async (path, options) => {
+    if (path === "/plugin/token-refresh") return {enabled: true, lead_hours: 144, scanned_at: "2026-11-01T00:00:00Z", next_at: "2030-11-01T00:00:00Z", next_account: "模拟账号", accounts: [{id: "a", label: "模拟账号", state: "scheduled", expires_at: "2030-11-07T00:00:00Z", next_at: "2030-11-01T00:00:00Z", last_result: "updated"}]};
     if (path === "/plugin/test-notification") {
       assert.equal(options.method, "POST");
       notificationRequests.push(JSON.parse(options.body));
@@ -87,10 +90,10 @@ context.renderModelOptions();
 assert.deepEqual(nodes.get("modelOptions").children.map(option => option.value), ["shared", "test-model"]);
 assert.match(nodes.get("modelHint").textContent, /1 \/ 3.*1 个账号暂无模型列表.*未注册：账号 B/);
 nodes.get("model").value = "possible-alias"; nodes.get("model").listeners.input();
-assert.match(nodes.get("modelHint").textContent, /0 \/ 3.*未注册：账号 A、账号 B.*模型别名及实际执行仍交给 CPA 判断/);
+assert.match(nodes.get("modelHint").textContent, /0 \/ 3.*未注册：账号 A、账号 B.*支持模型别名/);
 assert.equal(nodes.get("model").value, "possible-alias");
 context.accounts = [{id: "legacy"}]; context.renderModelOptions();
-assert.match(nodes.get("modelHint").textContent, /CPA 暂未提供账号模型列表/);
+assert.match(nodes.get("modelHint").textContent, /CPA 暂未提供模型列表/);
 context.accounts = []; context.renderModelOptions(); assert.match(nodes.get("modelHint").textContent, /暂无可执行的 Codex 账号/);
 nodes.get("webhookURL").value = " http://127.0.0.1/draft-webhook "; nodes.get("barkURL").value = " http://127.0.0.1/draft-bark ";
 nodes.get("webhookHeaders").value = '{"Authorization":"Bearer fake-draft-header"}'; nodes.get("model").value = "";
@@ -108,6 +111,31 @@ assert.match(nodes.get("notificationTestResult").textContent, /请先填写 Webh
 nodes.get("webhookHeaders").value = '{"Authorization":'; await nodes.get("testNotification").listeners.click();
 assert.match(nodes.get("notificationTestResult").textContent, /请求头必须是有效的 JSON 对象/);
 assert.equal(nodes.get("testNotification").disabled, false); assert.equal(notificationRequests.length, 1);
+context.settingsDirty = false; context.tokenSettingsDirty = false; context.fillConfig(original, {});
+assert.equal(nodes.get("tokenRefreshLead").value, 5); assert.equal(nodes.get("tokenRefreshUnit").value, "24");
+assert.equal(nodes.get("tokenRefreshEnabled").checked, false, "令牌刷新默认关闭");
+nodes.get("tokenRefreshLead").value = "6";
+assert.equal(context.readTokenRefreshConfig().token_refresh_before_hours, 144);
+nodes.get("tokenRefreshUnit").value = "1"; nodes.get("tokenRefreshLead").value = "36";
+assert.equal(context.readTokenRefreshConfig().token_refresh_before_hours, 36, "小时单位正确换算");
+nodes.get("tokenRefreshLead").value = "0"; assert.throws(() => context.readTokenRefreshConfig(), /提前时长/);
+nodes.get("tokenRefreshLead").value = "36"; nodes.get("tokenRefreshEnabled").checked = true;
+nodes.get("tokenRefreshSettings").listeners.input();
+assert.equal(context.tokenSettingsDirty, true);
+nodes.get("prompt").value = "unsaved warmup draft"; context.settingsDirty = true;
+context.fillConfig({...original, token_refresh_before_hours: 120, token_refresh_management_key: "obsolete-fake-key", token_refresh_management_url: "http://127.0.0.1:8317"}, {});
+assert.equal(nodes.get("tokenRefreshLead").value, "36", "读取配置保留未保存的刷新时长");
+assert.equal(nodes.get("prompt").value, "unsaved warmup draft", "刷新设置与预热草稿独立");
+const beforeTokenSave = saved.length;
+nodes.get("tokenRefreshSettings").listeners.submit({preventDefault() {}}); await pending;
+assert.equal(saved.length, beforeTokenSave + 1);
+assert.deepEqual(saved.at(-1), {...original, token_refresh_enabled: true, token_refresh_before_hours: 36}, "刷新设置保留预热配置和 CPA 管理字段，清理旧连接字段");
+assert.equal(nodes.get("prompt").value, "unsaved warmup draft"); assert.equal(context.settingsDirty, true); assert.equal(context.tokenSettingsDirty, false);
+assert.match(nodes.get("nextTokenRefresh").textContent, /2030/); assert.equal(nodes.get("nextTokenAccount").textContent, "模拟账号");
+assert.equal(refreshTables.at(-1)[0], "tokenRefreshAccounts"); assert.equal(refreshTables.at(-1)[2][0][3], "已排期");
+assert.equal(refreshTables.at(-1)[2][0][5], "凭据已更新");
+assert.ok(html.includes('id="tab-tokens"') && html.includes('id="view-tokens"') && html.includes('id="nextTokenRefresh"'), "顶部菜单与刷新计划摘要齐备");
 assert.ok(html.indexOf('id="dailyPlan"') < html.indexOf('id="add"') && html.indexOf('id="add"') < html.indexOf('id="historyHeading"'), "添加时刻属于每日计划");
 assert.equal(/id="webhook(?:Username|Password)"/.test(html), false, "不再显示独立账号密码输入");
-console.log("设置页验证通过：消息模式区分、固定草稿保留、自定义 Webhook、旧认证迁移、校验、测试通知和日程按钮位置。");
+assert.equal(/id="(?:tokenRefreshURL|tokenRefreshKey|useConnectionKey)"/.test(html), false, "只保留顶部连接设置");
+console.log("设置页验证通过：预热与通知、令牌刷新独立保存、天/小时换算、草稿保留和下次刷新时间。");

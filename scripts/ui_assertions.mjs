@@ -25,5 +25,14 @@ export default function assertLayout(element) {
       }
     }
   }
+  if (active[0].dataset.view === "tokens") {
+    if (!doc.querySelector("#nextTokenRefresh") || !doc.querySelector("#nextTokenAccount")) throw new Error("缺少下次账号刷新摘要");
+    if (viewport > 680) {
+      const lead = doc.getElementById("tokenRefreshLead").getBoundingClientRect();
+      const unit = doc.getElementById("tokenRefreshUnit").getBoundingClientRect();
+      if (Math.abs(lead.top - unit.top) > 1 || Math.abs(lead.height - unit.height) > 1) throw new Error("刷新设置的时长和单位没有对齐");
+    }
+    if (doc.querySelector("#tokenRefreshURL, #tokenRefreshKey, #useConnectionKey")) throw new Error("刷新页不应重复设置后台连接");
+  }
   return {view: active[0].dataset.view, viewport, horizontalOverflow: false, checkedCells: panels[0].querySelectorAll("td").length};
 }

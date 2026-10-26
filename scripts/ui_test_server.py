@@ -4,6 +4,7 @@ import argparse
 import base64
 import json
 import tempfile
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -36,6 +37,7 @@ config = {
     "model": "gpt-5.6-luna", "prompt": "UI test only", "timezone": "Asia/Singapore",
     "schedules": [{"id": "早", "at": "05:00", "enabled": True}, {"id": "中", "at": "10:05", "enabled": True}, {"id": "晚", "at": "15:10", "enabled": True}],
     "max_log_entries": 200, "state_file": str(state),
+    "token_refresh_enabled": False, "token_refresh_before_hours": 120,
     "history_retention_days": 30, "notify_webhook_url": "", "notify_bark_url": "",
     "notify_webhook_method": "POST", "notify_webhook_format": "json",
     "notify_webhook_headers": {"Authorization": "Bearer local-preview-only"},
@@ -76,8 +78,20 @@ class Handler(BaseHTTPRequestHandler):
             html = f'<!doctype html><html lang="zh-CN" data-theme="{theme}"><meta charset="utf-8"><title>375px UI test</title><body style="margin:0;background:#eee"><iframe title="375px viewport" src="/v0/resource/plugins/codex-5h-reset/status" style="display:block;width:375px;max-width:100%;height:100vh;border:0"></iframe></body></html>'
             self.send(200, html.encode(), "text/html")
             return
-        if self.path.startswith("/v0/management/") and self.headers.get("Authorization") != "Bearer test-management-key":
+        if self.path.startswith(("/v0/management/", "/v8/management/")) and self.headers.get("Authorization") != "Bearer test-management-key":
             self.send(401, b'{"error":"use test-management-key"}')
+            return
+        if parsed.path == "/v8/management/config/server" and self.command == "GET":
+            self.send(200, json.dumps({"host": "127.0.0.1", "port": server.server_port, "tls": {"enable": False}}).encode())
+            return
+        if parsed.path == "/v0/management/auth-files/refresh" and self.command == "POST":
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            id_ = body["auth_index"]
+            assert body["name"] == id_ + ".json" and id_ in cpa.credentials
+            now = datetime.now(timezone.utc)
+            cpa.credentials[id_] = {**cpa.credentials[id_], "access_token": "fake-rotated-access-" + now.isoformat(), "refresh_token": "fake-rotated-refresh-" + now.isoformat(), "expired": (now + timedelta(days=10)).isoformat()}
+            self.send(200, b'{"ok":true}')
+            print("本地模拟 CPA 已刷新账号令牌；未访问真实账号", flush=True)
             return
         if self.path.endswith("/config"):
             if self.command == "GET":
@@ -92,7 +106,7 @@ class Handler(BaseHTTPRequestHandler):
                 print("UI 保存通过：enabled、priority、store 均保留", flush=True)
                 return
         request_body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
-        code, body = cpa.management(self.command, parsed.path, request_body, parse_qs(parsed.query))
+        code, body = cpa.management(self.command, parsed.path, request_body, parse_qs(parsed.query), {key.title(): [value] for key, value in self.headers.items()})
         self.send(code, body, "text/html" if body.startswith(b"<!doctype") else "application/json")
 
     def send(self, code, body, content_type="application/json"):

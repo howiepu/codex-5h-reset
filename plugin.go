@@ -34,6 +34,7 @@ func (e *hostError) Error() string { return e.Code }
 
 type managementRequest struct {
 	Method, Path string
+	Headers      http.Header
 	Body         []byte
 	Query        url.Values
 }
@@ -68,6 +69,8 @@ func dispatch(w *warmer, method string, raw []byte) (any, error) {
 				{"Method": "POST", "Path": "/plugins/" + pluginID + "/run"},
 				{"Method": "GET", "Path": "/plugins/" + pluginID + "/logs"},
 				{"Method": "GET", "Path": "/plugins/" + pluginID + "/accounts"},
+				{"Method": "GET", "Path": "/plugins/" + pluginID + "/token-refresh"},
+				{"Method": "POST", "Path": "/plugins/" + pluginID + "/connection"},
 				{"Method": "POST", "Path": "/plugins/" + pluginID + "/stop"},
 				{"Method": "POST", "Path": "/plugins/" + pluginID + "/test-notification"},
 			},
@@ -98,6 +101,8 @@ func registration() any {
 				{"Name": "max_log_entries", "Type": "integer", "Description": "保留的日志数，1–2000"},
 				{"Name": "state_file", "Type": "string", "Description": "运行历史 JSON 路径，应位于持久化卷内"},
 				{"Name": "history_retention_days", "Type": "integer", "Description": "日志归档保留天数，1–365，默认 30"},
+				{"Name": "token_refresh_enabled", "Type": "boolean", "Description": "开启 Codex 令牌提前刷新，后台按账号串行调用 CPA 刷新接口，默认关闭"},
+				{"Name": "token_refresh_before_hours", "Type": "number", "Description": "距离外层令牌到期的提前小时数，默认 120（5 天）"},
 				{"Name": "notify_webhook_url", "Type": "string", "Description": "可选：每轮失败汇总的 Webhook 地址"},
 				{"Name": "notify_webhook_method", "Type": "string", "Description": "Webhook 请求方法，默认 POST"},
 				{"Name": "notify_webhook_format", "Type": "string", "Description": "Webhook Body 格式：json、form 或 text，默认 json"},
@@ -129,6 +134,13 @@ func (w *warmer) handleManagement(req managementRequest) managementResponse {
 			return jsonResponse(http.StatusBadGateway, map[string]string{"error": err.Error()})
 		}
 		return jsonResponse(http.StatusOK, map[string]any{"accounts": accounts})
+	case "GET " + managementBase + "/token-refresh":
+		return jsonResponse(http.StatusOK, w.TokenRefreshStatus())
+	case "POST " + managementBase + "/connection":
+		if err := w.cacheConnection(req); err != nil {
+			return jsonResponse(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		return jsonResponse(http.StatusOK, connectionState{Cached: true})
 	case "POST " + managementBase + "/test-notification":
 		var cfg config
 		trimmed := bytes.TrimSpace(req.Body)

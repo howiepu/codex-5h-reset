@@ -7,6 +7,7 @@ import json
 import re
 import tempfile
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 
@@ -34,6 +35,8 @@ class FakeCPA:
         self.allocations = self.frees = 0
         self.model_delay = 0
         self.status_codes = {"a": 200, "b": 204}
+        now = datetime.now(timezone.utc)
+        self.credentials = {id_: {"type": "codex", "access_token": "fake-access-" + id_, "refresh_token": "fake-refresh-" + id_, "expired": (now + timedelta(days=days)).isoformat()} for id_, days in [("a", 7), ("b", 4)]}
         self.callback = HostCall(self.host_call)
         self.free_callback = Free(self.host_free)
         self.host = HostAPI(1, None, self.callback, self.free_callback)
@@ -50,7 +53,9 @@ class FakeCPA:
             method = method.decode()
             request = json.loads(C.string_at(raw, length))
             if method == "host.auth.list":
-                result = {"files": [{"id": "b", "label": "模拟账号 B", "provider": "codex", "unavailable": True, "status": "cooldown"}, {"id": "a", "label": "模拟账号 A", "provider": "codex", "status": "active"}, {"id": "disabled", "label": "已停用模拟账号", "provider": "codex", "disabled": True}, {"id": "other", "provider": "gemini"}]}
+                result = {"files": [{"id": "b", "name": "b.json", "auth_index": "b", "label": "模拟账号 B", "provider": "codex", "unavailable": True, "status": "cooldown"}, {"id": "a", "name": "a.json", "auth_index": "a", "label": "模拟账号 A", "provider": "codex", "status": "active"}, {"id": "disabled", "label": "已停用模拟账号", "provider": "codex", "disabled": True}, {"id": "other", "provider": "gemini"}]}
+            elif method == "host.auth.get":
+                result = {"json": self.credentials[request["auth_index"]]}
             elif method == "host.auth.models":
                 result = {"credentials": [{"id": "a", "provider": "codex", "models": ["gpt-5.6-luna", "gpt-6-luna"]}, {"id": "b", "provider": "codex", "models": ["gpt-6-luna"]}, {"id": "disabled", "provider": "codex", "models": []}]}
             elif method == "host.model.execute":
@@ -91,8 +96,8 @@ class FakeCPA:
         assert not self.errors, self.errors
         return envelope["result"]
 
-    def management(self, method, path, body=None, query=None):
-        request = {"Method": method, "Path": path, "Query": query or {}}
+    def management(self, method, path, body=None, query=None, headers=None):
+        request = {"Method": method, "Path": path, "Query": query or {}, "Headers": headers or {}}
         if body is not None:
             request["Body"] = base64.b64encode(body).decode()
         response = self.call("management.handle", request)
@@ -115,13 +120,23 @@ def main():
         if args.expected_version:
             assert metadata["Version"] == args.expected_version, metadata
         routes = cpa.call("management.register")
-        assert len(routes["routes"]) == 6 and len(routes["resources"]) == 1
+        assert len(routes["routes"]) == 8 and len(routes["resources"]) == 1
         base = "/v0/management/plugins/codex-5h-reset"
         code, html = cpa.management("GET", "/v0/resource/plugins/codex-5h-reset/status")
         assert code == 200 and b"<html" in html and b"ABI-smoke-only" not in html
         assert not cpa.requests, "注册插件时不得自动预热"
+        code, raw = cpa.management("POST", base + "/connection", b'{"url":"http://127.0.0.1:8317"}', headers={"Authorization": ["Bearer fake-cache-key"]})
+        assert code == 200 and json.loads(raw)["cached"]
+        assert Path(str(state) + ".connection.json").stat().st_mode & 0o777 == 0o600
+        _, status = cpa.management("GET", base + "/status")
+        assert json.loads(status)["connection"]["cached"] and b"fake-cache-key" not in status
         assert cpa.management("POST", base + "/test-notification", b"{}")[0] == 400
         assert not cpa.requests, "测试通知不得执行模型"
+        code, raw = cpa.management("GET", base + "/token-refresh")
+        plan = json.loads(raw)
+        assert code == 200 and plan["enabled"] is False and plan["lead_hours"] == 120
+        assert len(plan["accounts"]) == 3 and all(row.get("expires_at") and row.get("planned_at") for row in plan["accounts"] if row["id"] != "disabled")
+        assert b"fake-access" not in raw and b"fake-refresh" not in raw, "刷新计划不得输出账号令牌"
         code, raw = cpa.management("GET", base + "/accounts")
         accounts = json.loads(raw)["accounts"]
         assert code == 200 and [a["id"] for a in accounts] == ["a", "b", "disabled"]

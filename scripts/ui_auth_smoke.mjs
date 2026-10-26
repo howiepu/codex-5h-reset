@@ -9,6 +9,7 @@ for (const code of [401, 403, 200]) {
   const nodes = new Map();
   const context = vm.createContext({
     base: "/plugin",
+    activeView: "logs",
     connected: false,
     $: id => {
       if (!nodes.has(id)) nodes.set(id, {value: ""});
@@ -52,6 +53,38 @@ for (const code of [401, 403]) {
   assert.equal(context.connected, false);
   assert.equal(nodes.get("connection").open, true);
   assert.equal(nodes.get("settingsFields").disabled, true);
+  assert.equal(nodes.get("tokenRefreshFields").disabled, true);
   assert.equal(removed.length, code === 401 ? 2 : 0, "401 清除无效密钥，403 保留密钥并展示限制原因");
 }
-console.log("管理页鉴权验证通过：错误密钥只请求一次，正确密钥继续加载。");
+const connect = html.slice(html.indexOf("async function cacheCurrentConnection()"), html.indexOf('$("connectionForm").addEventListener'));
+for (const [server, expected] of [
+  [{host: "", port: 8318}, "http://127.0.0.1:8318"],
+  [{host: "0.0.0.0", port: 8317}, "http://127.0.0.1:8317"],
+  [{host: "::", port: 8317}, "http://[::1]:8317"],
+  [{host: "192.0.2.1", port: 8317}, "http://192.0.2.1:8317"],
+  [{host: "", port: 8317, tls: {enable: true}}, "https://public.example"],
+  [{port: 0}, null], [{port: 99999}, null], [{}, null],
+]) {
+  const paths = [], nodes = new Map();
+  const context = vm.createContext({
+    base: "/plugin", activeView: "logs", window: {location: {origin: "https://public.example"}},
+    $: id => { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); },
+    loadAll: async () => {}, notice() {},
+    request: async (path, options) => { paths.push([path, options]); return path.endsWith("/server") ? server : {cached: true}; },
+  });
+  vm.runInContext(connect, context);
+  if (expected) {
+    await context.connect();
+    assert.deepEqual(paths.map(([path]) => path), ["/v8/management/config/server", "/plugin/connection"]);
+    assert.deepEqual(JSON.parse(paths[1][1].body), {url: expected}, "只传自动识别的地址，密钥由现有认证头复用");
+    assert.equal(nodes.get("connection").open, false);
+  } else {
+    await assert.rejects(context.cacheCurrentConnection(), /端口/);
+    assert.equal(paths.length, 1, "无法识别原生端口时不能猜测并缓存地址");
+  }
+  paths.length = 0;
+  context.loadAll = async () => { throw Object.assign(new Error("denied"), {status: 401}); };
+  await assert.rejects(context.connect(), error => error.status === 401);
+  assert.equal(paths.length, 0, "顶部认证失败后不得继续读取地址或缓存密钥");
+}
+console.log("管理页鉴权与缓存验证通过：错误密钥只请求一次，自动识别原生地址，复用现有认证头。");

@@ -17,6 +17,10 @@ schedules:
     enabled: true
 max_log_entries: 200
 history_retention_days: 30
+# 令牌刷新独立于模型预热；默认关闭，提前 120 小时（5 天），串行调用 CPA 原生刷新接口。
+token_refresh_enabled: false
+token_refresh_before_hours: 120
+# 复用页面顶部连接；后台连接缓存于 state_file + ".connection.json"（权限 0600）。
 # 默认关闭，每轮有失败时按渠道发送一条摘要。地址可能含密钥，请保护 CPA 配置文件。
 notify_webhook_url: ""
 # 自定义 Webhook；认证直接填写在请求头中。GET 不发送请求体。

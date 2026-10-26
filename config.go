@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"net/url"
 	"path/filepath"
 	"sort"
@@ -18,7 +19,7 @@ const (
 	repository = "https://github.com/howiepu/codex-5h-reset"
 )
 
-var version = "0.1.4"
+var version = "0.1.5"
 
 type config struct {
 	Enabled               bool              `yaml:"enabled" json:"enabled"`
@@ -30,6 +31,10 @@ type config struct {
 	MaxLogEntries         int               `yaml:"max_log_entries" json:"max_log_entries"`
 	StateFile             string            `yaml:"state_file" json:"state_file"`
 	HistoryRetentionDays  int               `yaml:"history_retention_days" json:"history_retention_days"`
+	TokenRefreshEnabled   bool              `yaml:"token_refresh_enabled" json:"token_refresh_enabled"`
+	TokenRefreshHours     float64           `yaml:"token_refresh_before_hours" json:"token_refresh_before_hours"`
+	TokenRefreshURL       string            `yaml:"-" json:"-"`
+	TokenRefreshKey       string            `yaml:"-" json:"-"`
 	NotifyWebhookURL      string            `yaml:"notify_webhook_url" json:"notify_webhook_url"`
 	NotifyWebhookMethod   string            `yaml:"notify_webhook_method" json:"notify_webhook_method"`
 	NotifyWebhookFormat   string            `yaml:"notify_webhook_format" json:"notify_webhook_format"`
@@ -57,6 +62,7 @@ func defaultConfig() config {
 		Model: "gpt-5.6-luna", Prompt: "Reply with exactly: quota window activated",
 		Timezone: "Asia/Singapore", MaxLogEntries: 200,
 		HistoryRetentionDays: 30,
+		TokenRefreshHours:    120,
 		NotifyWebhookMethod:  "POST", NotifyWebhookFormat: "json",
 		StateFile: filepath.Join("plugins", "data", pluginID, "history.json"),
 	}
@@ -82,6 +88,9 @@ func parseConfig(raw []byte) (config, error) {
 	}
 	if cfg.HistoryRetentionDays < 1 || cfg.HistoryRetentionDays > 365 {
 		return cfg, fmt.Errorf("history_retention_days 必须在 1 到 365 之间")
+	}
+	if err := validateTokenRefreshConfig(&cfg); err != nil {
+		return cfg, err
 	}
 	if err := validateNotificationConfig(&cfg); err != nil {
 		return cfg, err
@@ -111,6 +120,13 @@ func parseConfig(raw []byte) (config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func validateTokenRefreshConfig(cfg *config) error {
+	if math.IsNaN(cfg.TokenRefreshHours) || math.IsInf(cfg.TokenRefreshHours, 0) || cfg.TokenRefreshHours < 1.0/60 || cfg.TokenRefreshHours > 365*24 {
+		return fmt.Errorf("令牌刷新提前时长必须在 1 分钟到 365 天之间")
+	}
+	return nil
 }
 
 func validateNotificationConfig(cfg *config) error {
