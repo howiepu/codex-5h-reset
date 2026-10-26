@@ -57,6 +57,8 @@
 
 该功能依赖 CPA 的 `/v0/management/auth-files/refresh`，已核对 v8.0.43 源码。CPA 自身的后台和 401 刷新仍然生效，`auth-auto-refresh-workers` 不限制插件逐账号调用的并发。
 
+“最近刷新”读取账号文件的外层 `last_refresh`，与插件的“最近尝试”分开展示。插件启用期间每分钟观察凭据变化，即使自动刷新关闭或后台连接未缓存，也会将检测到的更新写入插件运行日志和 UTC 归档，持久化去重；首次读取只建立基线。外部变化标记为“CPA 更新”，不推断自动或手动来源，也不导入 CPA 系统日志。
+
 ## 历史与通知
 
 ### 历史持久化
@@ -102,7 +104,7 @@ node scripts/ui_auth_smoke.mjs
 node scripts/ui_settings_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
-python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.5
+python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.6
 python3 scripts/ui_server_smoke.py dist/codex-5h-reset.dylib
 ```
 

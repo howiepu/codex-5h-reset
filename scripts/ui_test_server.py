@@ -89,7 +89,7 @@ class Handler(BaseHTTPRequestHandler):
             id_ = body["auth_index"]
             assert body["name"] == id_ + ".json" and id_ in cpa.credentials
             now = datetime.now(timezone.utc)
-            cpa.credentials[id_] = {**cpa.credentials[id_], "access_token": "fake-rotated-access-" + now.isoformat(), "refresh_token": "fake-rotated-refresh-" + now.isoformat(), "expired": (now + timedelta(days=10)).isoformat()}
+            cpa.credentials[id_] = {**cpa.credentials[id_], "access_token": "fake-rotated-access-" + now.isoformat(), "refresh_token": "fake-rotated-refresh-" + now.isoformat(), "expired": (now + timedelta(days=10)).isoformat(), "last_refresh": now.isoformat()}
             self.send(200, b'{"ok":true}')
             print("本地模拟 CPA 已刷新账号令牌；未访问真实账号", flush=True)
             return

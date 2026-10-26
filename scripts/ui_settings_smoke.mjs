@@ -26,7 +26,7 @@ const context = vm.createContext({
   formatTime: value => value || "—",
   action: (_button, _message, fn) => { pending = fn(); },
   request: async (path, options) => {
-    if (path === "/plugin/token-refresh") return {enabled: true, lead_hours: 144, scanned_at: "2026-11-01T00:00:00Z", next_at: "2030-11-01T00:00:00Z", next_account: "模拟账号", accounts: [{id: "a", label: "模拟账号", state: "scheduled", expires_at: "2030-11-07T00:00:00Z", next_at: "2030-11-01T00:00:00Z", last_result: "updated"}]};
+    if (path === "/plugin/token-refresh") return {enabled: true, lead_hours: 144, scanned_at: "2026-11-01T00:00:00Z", next_at: "2030-11-01T00:00:00Z", next_account: "模拟账号", accounts: [{id: "a", label: "模拟账号", state: "scheduled", expires_at: "2030-11-07T00:00:00Z", next_at: "2030-11-01T00:00:00Z", last_refresh: "2030-10-28T00:00:00Z", refresh_source: "cpa"}]};
     if (path === "/plugin/test-notification") {
       assert.equal(options.method, "POST");
       notificationRequests.push(JSON.parse(options.body));
@@ -133,7 +133,14 @@ assert.deepEqual(saved.at(-1), {...original, token_refresh_enabled: true, token_
 assert.equal(nodes.get("prompt").value, "unsaved warmup draft"); assert.equal(context.settingsDirty, true); assert.equal(context.tokenSettingsDirty, false);
 assert.match(nodes.get("nextTokenRefresh").textContent, /2030/); assert.equal(nodes.get("nextTokenAccount").textContent, "模拟账号");
 assert.equal(refreshTables.at(-1)[0], "tokenRefreshAccounts"); assert.equal(refreshTables.at(-1)[2][0][3], "已排期");
-assert.equal(refreshTables.at(-1)[2][0][5], "凭据已更新");
+assert.equal(refreshTables.at(-1)[1][4], "最近刷新");
+assert.equal(refreshTables.at(-1)[2][0][4], "2030-10-28T00:00:00Z · CPA 更新");
+assert.equal(refreshTables.at(-1)[2][0][5], "—", "CPA 更新不能伪造插件尝试记录");
+context.renderTokenRefresh({enabled: true, accounts: [{id: "a", state: "scheduled", last_refresh: "2030-10-28T00:00:00Z", refresh_source: "plugin", last_attempt: "2030-10-27T23:59:00Z", last_result: "failed", last_error: "保留插件尝试失败"}]});
+assert.equal(refreshTables.at(-1)[2][0][4], "2030-10-28T00:00:00Z · 插件");
+assert.equal(refreshTables.at(-1)[2][0][5], "2030-10-27T23:59:00Z");
+assert.equal(refreshTables.at(-1)[2][0][6], "保留插件尝试失败");
+assert.ok(html.includes('"token_refresh.observed": "CPA 凭据更新"'), "插件运行日志应识别 CPA 更新事件");
 assert.ok(html.includes('id="tab-tokens"') && html.includes('id="view-tokens"') && html.includes('id="nextTokenRefresh"'), "顶部菜单与刷新计划摘要齐备");
 assert.ok(html.indexOf('id="dailyPlan"') < html.indexOf('id="add"') && html.indexOf('id="add"') < html.indexOf('id="historyHeading"'), "添加时刻属于每日计划");
 assert.equal(/id="webhook(?:Username|Password)"/.test(html), false, "不再显示独立账号密码输入");

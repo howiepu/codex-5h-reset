@@ -305,8 +305,9 @@ const views = {
   settings: "预热设置"
 };
 const eventNames = {"configuration.updated": "配置加载", "schedule.planned": "计划安排", "schedule.triggered": "定时触发", "schedule.skipped": "计划跳过", "warmup.started": "开始预热", "warmup.selection": "账号选择", "warmup.no_credentials": "无可用账号", "warmup.credential_started": "账号开始", "warmup.credential": "账号结果", "warmup.finished": "本轮结束", "notification.sent": "通知已发送", "notification.failed": "通知失败"};
-Object.assign(eventNames, {"token_refresh.started": "令牌刷新", "token_refresh.success": "令牌已更新", "token_refresh.failed": "令牌刷新异常"});
+Object.assign(eventNames, {"token_refresh.started": "令牌刷新", "token_refresh.success": "令牌已更新", "token_refresh.failed": "令牌刷新异常", "token_refresh.observed": "CPA 凭据更新"});
 const fieldNames = {run_id: "轮次 ID", source: "触发来源", auth_id: "账号 ID", label: "账号名称", model: "模型", status_code: "HTTP 状态", success: "请求成功", duration_ms: "耗时（ms）", error_kind: "错误分类", auth_total: "凭证总数", codex_total: "Codex 账号数", selected_count: "本轮选择数", skipped_disabled: "跳过禁用数", skipped_missing_id: "跳过缺少 ID 数", reported_unavailable: "列表中 CPA 标记不可用数（可选，交 CPA 判断）", reported_inactive: "列表中 CPA 非 active 数（可选，交 CPA 判断）", credential_count: "本轮账号数", success_count: "成功数", failure_count: "失败数", skipped_count: "未发送数", schedule_id: "日程", scheduled_at: "计划时间", channel: "通知渠道"};
+Object.assign(fieldNames, {refresh_source: "刷新来源", refreshed_at: "最近刷新", expires_at: "令牌到期", planned_at: "计划刷新"});
 function showView(view) {
   activeView = view;
   for (const panel of document.querySelectorAll("[data-view-panel]")) panel.hidden = panel.dataset.viewPanel !== view;
@@ -365,7 +366,7 @@ function table(target, headings, rows, keys = []) {
   if (!rows.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "暂无记录。"; container.append(empty); return; }
   const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : target === "tokenRefreshAccounts" ? "账号令牌刷新计划" : "账号结果");
   const cols = document.createElement("colgroup");
-  (target === "logs" ? [15, 8, 13, 20, 29, 15] : target === "tokenRefreshAccounts" ? [18, 17, 17, 12, 16, 20] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
+  (target === "logs" ? [15, 8, 13, 20, 29, 15] : target === "tokenRefreshAccounts" ? [17, 16, 16, 10, 16, 13, 12] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
   const head = table.createTHead().insertRow();
   headings.forEach(title => { const th = document.createElement("th"); th.scope = "col"; th.textContent = title; head.append(th); });
   const body = table.createTBody();
@@ -489,7 +490,7 @@ function renderLogs() {
   const visible = rows.slice(0, 500), keys = visible.map(e => JSON.stringify([e.time, e.event, e.fields?.auth_id, e.fields?.run_id]));
   table("logs", ["时间", "级别", "事件", "账号", "说明", "详情"], visible.map(e => {
     const fields = {"事件代码": e.event};
-    for (const [key, value] of Object.entries(e.fields || {})) fields[fieldNames[key] || key] = key === "source" ? sourceName(value) : value;
+    for (const [key, value] of Object.entries(e.fields || {})) fields[fieldNames[key] || key] = key === "source" ? sourceName(value) : key === "refresh_source" ? value === "plugin" ? "插件" : "CPA 更新" : value;
     return [formatTime(e.time, timezone), e.level, eventNames[e.event] || e.event, e.fields?.label || e.fields?.auth_id || "—", e.message, expandable(JSON.stringify(fields, null, 2), "查看详情")];
   }), keys);
   for (const tr of $("logs").querySelectorAll("tr")) if (open.has(tr.dataset.key)) tr.querySelectorAll("details").forEach(node => { node.open = true; });
@@ -581,7 +582,7 @@ function renderTokenRefresh(data) {
   $("tokenScanTime").title = "最近读取 " + formatTime(data.scanned_at, timezone);
   $("tokenRefreshError").textContent = data.error || ""; $("tokenRefreshError").hidden = !data.error;
   const lastNames = {success: "成功", failed: "失败", uncertain: "结果待确认", running: "进行中", updated: "凭据已更新"};
-  table("tokenRefreshAccounts", ["账号", "令牌到期", "下次刷新", "队列状态", "最近尝试", "说明"], rows.map(row => [row.label || row.id, row.expires_at ? formatTime(row.expires_at, timezone) : "—", row.next_at ? formatTime(row.next_at, timezone) : row.state === "paused" && row.planned_at ? formatTime(row.planned_at, timezone) : "—", names[row.state] || row.state, row.last_attempt ? formatTime(row.last_attempt, timezone) : "—", row.message || row.last_error || lastNames[row.last_result] || "—"]));
+  table("tokenRefreshAccounts", ["账号", "令牌到期", "下次刷新", "队列状态", "最近刷新", "最近尝试", "说明"], rows.map(row => [row.label || row.id, row.expires_at ? formatTime(row.expires_at, timezone) : "—", row.next_at ? formatTime(row.next_at, timezone) : row.state === "paused" && row.planned_at ? formatTime(row.planned_at, timezone) : "—", names[row.state] || row.state, row.last_refresh ? formatTime(row.last_refresh, timezone) + " · " + (row.refresh_source === "plugin" ? "插件" : "CPA 更新") : "—", row.last_attempt ? formatTime(row.last_attempt, timezone) : "—", row.message || row.last_error || lastNames[row.last_result] || "—"]));
 }
 async function loadTokenRefresh() {
   if (tokenRequest) return tokenRequest;

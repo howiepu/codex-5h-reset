@@ -32,22 +32,31 @@ type refreshRecord struct {
 }
 
 type refreshJournal struct {
-	Records     map[string]refreshRecord `json:"records"`
-	ServiceHash string                   `json:"service_hash,omitempty"`
-	Hold        string                   `json:"hold,omitempty"`
+	Records     map[string]refreshRecord      `json:"records"`
+	Observed    map[string]refreshObservation `json:"observed,omitempty"`
+	ServiceHash string                        `json:"service_hash,omitempty"`
+	Hold        string                        `json:"hold,omitempty"`
+}
+
+type refreshObservation struct {
+	Version     string    `json:"version"`
+	ExpiresAt   time.Time `json:"expires_at"`
+	RefreshedAt time.Time `json:"refreshed_at"`
 }
 
 type refreshAccount struct {
-	ID          string     `json:"id"`
-	Label       string     `json:"label"`
-	State       string     `json:"state"`
-	Message     string     `json:"message,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	PlannedAt   *time.Time `json:"planned_at,omitempty"`
-	NextAt      *time.Time `json:"next_at,omitempty"`
-	LastAttempt *time.Time `json:"last_attempt,omitempty"`
-	LastResult  string     `json:"last_result,omitempty"`
-	LastError   string     `json:"last_error,omitempty"`
+	ID            string     `json:"id"`
+	Label         string     `json:"label"`
+	State         string     `json:"state"`
+	Message       string     `json:"message,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	PlannedAt     *time.Time `json:"planned_at,omitempty"`
+	NextAt        *time.Time `json:"next_at,omitempty"`
+	LastRefresh   *time.Time `json:"last_refresh,omitempty"`
+	RefreshSource string     `json:"refresh_source,omitempty"`
+	LastAttempt   *time.Time `json:"last_attempt,omitempty"`
+	LastResult    string     `json:"last_result,omitempty"`
+	LastError     string     `json:"last_error,omitempty"`
 }
 
 type refreshStatus struct {
@@ -62,10 +71,15 @@ type refreshStatus struct {
 }
 
 type refreshCredential struct {
-	Auth    authEntry
-	Expires time.Time
-	Version string
-	Message string
+	Auth        authEntry
+	Expires     time.Time
+	Version     string
+	Message     string
+	RefreshedAt time.Time
+}
+
+func (c refreshCredential) observation() refreshObservation {
+	return refreshObservation{Version: c.Version, ExpiresAt: c.Expires, RefreshedAt: c.RefreshedAt}
 }
 
 func refreshServiceHash(cfg config) string {
@@ -79,6 +93,9 @@ func (w *warmer) refreshJournalLocked() *refreshJournal {
 	}
 	if w.history.TokenRefresh.Records == nil {
 		w.history.TokenRefresh.Records = map[string]refreshRecord{}
+	}
+	if w.history.TokenRefresh.Observed == nil {
+		w.history.TokenRefresh.Observed = map[string]refreshObservation{}
 	}
 	return w.history.TokenRefresh
 }
@@ -118,6 +135,7 @@ func decodeRefreshCredential(auth authEntry, raw json.RawMessage) refreshCredent
 		credential.Message = "账号已停用或不再是 Codex 凭据"
 		return credential
 	}
+	credential.RefreshedAt, _ = credentialTime(data["last_refresh"])
 	_ = json.Unmarshal(data["access_token"], &accessToken)
 	_ = json.Unmarshal(data["refresh_token"], &refreshToken)
 	if strings.TrimSpace(refreshToken) == "" {
@@ -208,6 +226,15 @@ func (w *warmer) tokenRefreshPlan(cfg config, now time.Time) (refreshStatus, []r
 		credential := w.readRefreshCredential(auth)
 		row := refreshAccount{ID: auth.ID, Label: auth.Label, State: "skipped", Message: credential.Message}
 		record := records[auth.ID]
+		if !credential.RefreshedAt.IsZero() {
+			row.LastRefresh, row.RefreshSource = &credential.RefreshedAt, "cpa"
+		}
+		if record.Version == credential.Version && record.State == "success" && !record.FinishedAt.IsZero() && !credential.RefreshedAt.After(record.FinishedAt) {
+			row.RefreshSource = "plugin"
+			if row.LastRefresh == nil {
+				row.LastRefresh = &record.FinishedAt
+			}
+		}
 		if !record.AttemptedAt.IsZero() {
 			row.LastAttempt, row.LastResult, row.LastError = &record.AttemptedAt, record.State, record.Error
 			if record.State == "running" && active != auth.ID {
@@ -215,9 +242,6 @@ func (w *warmer) tokenRefreshPlan(cfg config, now time.Time) (refreshStatus, []r
 			}
 		}
 		if credential.Message == "" {
-			if record.Version != "" && record.Version != credential.Version {
-				row.LastResult, row.LastError = "updated", ""
-			}
 			planned := credential.Expires.Add(-time.Duration(cfg.TokenRefreshHours * float64(time.Hour)))
 			row.ExpiresAt, row.PlannedAt, row.NextAt, row.State = &credential.Expires, &planned, &planned, "scheduled"
 			if !planned.After(now) {
@@ -280,11 +304,17 @@ func (w *warmer) tokenRefreshLoop(ctx context.Context, cfg config, done chan<- s
 	defer close(done)
 	ticker := time.NewTicker(refreshScanInterval)
 	defer ticker.Stop()
-	for {
-		current, connection := refreshConnectionConfig(cfg)
-		if connection.Cached {
-			w.tokenRefreshCycle(ctx, current, time.Now())
+	if !cfg.TokenRefreshEnabled {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		case <-w.refreshWake:
 		}
+	}
+	for {
+		current, _ := refreshConnectionConfig(cfg)
+		w.tokenRefreshCycle(ctx, current, time.Now())
 		select {
 		case <-ctx.Done():
 			return
@@ -294,13 +324,59 @@ func (w *warmer) tokenRefreshLoop(ctx context.Context, cfg config, done chan<- s
 	}
 }
 
-func (w *warmer) tokenRefreshCycle(ctx context.Context, cfg config, now time.Time) {
-	view, credentials := w.tokenRefreshPlan(cfg, now)
-	if !view.Enabled || view.Error != "" || ctx.Err() != nil {
+func (w *warmer) observeTokenRefreshes(cfg config, credentials []refreshCredential, now time.Time) {
+	type observedLog struct {
+		entry        logEntry
+		storageError string
+	}
+	var logs []observedLog
+	w.mu.Lock()
+	if w.stateLocked || cfg.StateFile != w.cfg.StateFile {
+		w.mu.Unlock()
 		return
 	}
+	journal := w.refreshJournalLocked()
+	dirty := false
+	for _, credential := range credentials {
+		id, current := credential.Auth.ID, credential.observation()
+		previous, exists := journal.Observed[id]
+		if current == previous || w.refreshActive == id {
+			continue
+		}
+		journal.Observed[id] = current
+		dirty = true
+		if !exists {
+			continue
+		}
+		fields := map[string]any{"auth_id": id, "label": credential.Auth.Label, "refresh_source": "cpa", "expires_at": credential.Expires.Format(time.RFC3339), "planned_at": credential.Expires.Add(-time.Duration(cfg.TokenRefreshHours * float64(time.Hour))).Format(time.RFC3339)}
+		if !credential.RefreshedAt.IsZero() {
+			fields["refreshed_at"] = credential.RefreshedAt.Format(time.RFC3339)
+		}
+		entry := logEntry{Time: now.UTC(), Level: "info", Event: "token_refresh.observed", Message: "检测到 CPA 凭据更新，已重新计算刷新计划", Fields: fields}
+		logs = append(logs, observedLog{entry: entry, storageError: w.logLocked(entry)})
+		dirty = false
+	}
+	if dirty || w.stateError != "" {
+		w.persistLocked()
+	}
+	w.mu.Unlock()
+	for _, item := range logs {
+		w.emitLog(item.entry, item.storageError)
+	}
+}
+
+func (w *warmer) tokenRefreshCycle(ctx context.Context, cfg config, now time.Time) {
+	if ctx.Err() != nil || !cfg.Enabled {
+		return
+	}
+	view, credentials := w.tokenRefreshPlan(cfg, now)
+	if credentials == nil || ctx.Err() != nil {
+		return
+	}
+	w.observeTokenRefreshes(cfg, credentials, now)
 	w.mu.Lock()
 	if journal := w.history.TokenRefresh; journal != nil {
+		removed := false
 		present := map[string]bool{}
 		for _, row := range view.Accounts {
 			present[row.ID] = true
@@ -308,10 +384,23 @@ func (w *warmer) tokenRefreshCycle(ctx context.Context, cfg config, now time.Tim
 		for id := range journal.Records {
 			if !present[id] {
 				delete(journal.Records, id)
+				removed = true
 			}
+		}
+		for id := range journal.Observed {
+			if !present[id] {
+				delete(journal.Observed, id)
+				removed = true
+			}
+		}
+		if removed {
+			w.persistLocked()
 		}
 	}
 	w.mu.Unlock()
+	if !view.Enabled || view.Error != "" || ctx.Err() != nil {
+		return
+	}
 	byID := map[string]refreshCredential{}
 	for _, credential := range credentials {
 		byID[credential.Auth.ID] = credential
@@ -350,10 +439,11 @@ func (w *warmer) tokenRefreshCycle(ctx context.Context, cfg config, now time.Tim
 		}
 		w.log("info", "token_refresh.started", "开始调用 CPA 刷新账号令牌", map[string]any{"auth_id": row.ID, "label": row.Label})
 		outcome := requestTokenRefresh(ctx, cfg, current.Auth)
+		var updated refreshCredential
 		record.FinishedAt = time.Now().UTC()
 		record.Error, record.Permanent = outcome.Error, outcome.Permanent
 		if outcome.Error == "" {
-			updated := w.readRefreshCredential(current.Auth)
+			updated = w.readRefreshCredential(current.Auth)
 			if updated.Message != "" || updated.Version == current.Version {
 				outcome.Uncertain = true
 				record.Error = "CPA 已返回成功，但尚未确认凭据更新；稍后重新核对"
@@ -377,6 +467,9 @@ func (w *warmer) tokenRefreshCycle(ctx context.Context, cfg config, now time.Tim
 		w.mu.Lock()
 		journal = w.refreshJournalLocked()
 		journal.Records[row.ID] = record
+		if updated.Version != "" && updated.Message == "" {
+			journal.Observed[row.ID] = updated.observation()
+		}
 		if outcome.Hold {
 			journal.ServiceHash, journal.Hold = refreshServiceHash(cfg), record.Error
 		}

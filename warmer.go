@@ -140,7 +140,7 @@ func (w *warmer) Configure(cfg config) {
 	}
 	stop, done := w.stop, w.done
 	var refreshCtx context.Context
-	if cfg.Enabled && cfg.TokenRefreshEnabled {
+	if cfg.Enabled {
 		refreshCtx, w.refreshCancel = context.WithCancel(context.Background())
 		w.refreshDone = make(chan struct{})
 	}
@@ -303,9 +303,16 @@ func (w *warmer) Status() status {
 }
 
 func (w *warmer) log(level, event, message string, fields map[string]any) {
-	w.mu.Lock()
-	previousError := w.stateError + w.archiveError
 	entry := logEntry{Time: time.Now().UTC(), Level: level, Event: event, Message: message, Fields: fields}
+	w.mu.Lock()
+	storageError := w.logLocked(entry)
+	w.mu.Unlock()
+	w.emitLog(entry, storageError)
+}
+
+// 调用方持锁，将观察基线与对应日志保存于同一份历史快照。
+func (w *warmer) logLocked(entry logEntry) string {
+	previousError := w.stateError + w.archiveError
 	w.history.Logs = append(w.history.Logs, entry)
 	w.trimLogsLocked()
 	w.persistLocked()
@@ -316,13 +323,19 @@ func (w *warmer) log(level, event, message string, fields map[string]any) {
 		w.archiveError, w.archiveDay = "", day
 	}
 	storageError := w.stateError + w.archiveError
-	w.mu.Unlock()
-	hostFields := map[string]any{"plugin_id": pluginID, "event": event}
-	for key, value := range fields {
+	if storageError != previousError {
+		return storageError
+	}
+	return ""
+}
+
+func (w *warmer) emitLog(entry logEntry, storageError string) {
+	hostFields := map[string]any{"plugin_id": pluginID, "event": entry.Event}
+	for key, value := range entry.Fields {
 		hostFields[key] = value
 	}
-	_ = w.host("host.log", map[string]any{"level": level, "message": message, "fields": hostFields}, &struct{}{})
-	if storageError != "" && storageError != previousError {
+	_ = w.host("host.log", map[string]any{"level": entry.Level, "message": entry.Message, "fields": hostFields}, &struct{}{})
+	if storageError != "" {
 		_ = w.host("host.log", map[string]any{"level": "error", "message": storageError, "fields": map[string]any{"plugin_id": pluginID, "event": "history.storage_failed"}}, &struct{}{})
 	}
 }

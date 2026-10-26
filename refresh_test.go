@@ -70,6 +70,170 @@ func (f *refreshFixture) rotate(id string, validity time.Duration) {
 	f.data[id]["access_token"] = fmt.Sprintf("rotated-access-canary-%d", f.rotated)
 	f.data[id]["refresh_token"] = fmt.Sprintf("rotated-refresh-canary-%d", f.rotated)
 	f.data[id]["expired"] = time.Now().Add(validity).UTC().Format(time.RFC3339)
+	f.data[id]["last_refresh"] = time.Now().UTC().Format(time.RFC3339)
+}
+
+func TestObserveCPARefreshAndPersistLog(t *testing.T) {
+	w, cfg, f := newRefreshFixture(t)
+	f.auths = f.auths[2:3]
+	cfg.TokenRefreshEnabled = false
+	initial := time.Now().Add(-24 * time.Hour).UTC().Truncate(time.Second)
+	f.data["future"]["last_refresh"] = initial.Format(time.RFC3339)
+	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	baseline, _ := w.tokenRefreshPlan(cfg, time.Now())
+	if baseline.Accounts[0].LastRefresh == nil || !baseline.Accounts[0].LastRefresh.Equal(initial) || baseline.Accounts[0].LastAttempt != nil {
+		t.Fatal("已有的 CPA 刷新时间应立即展示，不产生插件尝试")
+	}
+	countUpdates := func(w *warmer) int {
+		t.Helper()
+		logs, err := w.Logs(time.Now().UTC().Format("2006-01-02"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, entry := range logs {
+			if entry.Event == "token_refresh.observed" {
+				count++
+			}
+		}
+		return count
+	}
+	if countUpdates(w) != 0 {
+		t.Fatal("首次读取只能建立基线，不能伪造历史刷新日志")
+	}
+	refreshed := time.Now().UTC().Truncate(time.Second)
+	f.rotate("future", 10*24*time.Hour)
+	f.data["future"]["last_refresh"] = refreshed.Format(time.RFC3339)
+	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	if got := countUpdates(w); got != 1 {
+		t.Fatalf("CPA 更新后即使自动刷新关闭，也应产生一条运行日志，实际 %d 条", got)
+	}
+	view, _ := w.tokenRefreshPlan(cfg, time.Now())
+	raw, _ := json.Marshal(view.Accounts[0])
+	var row map[string]any
+	_ = json.Unmarshal(raw, &row)
+	if row["last_refresh"] != refreshed.Format(time.RFC3339) || row["refresh_source"] != "cpa" || row["last_attempt"] != nil {
+		t.Fatalf("应显示 CPA 最近刷新，不能伪造插件尝试：%s", raw)
+	}
+	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	w.Stop()
+	restarted := newWarmer(w.host)
+	restarted.Configure(cfg)
+	defer restarted.Stop()
+	restarted.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	if countUpdates(restarted) != 1 {
+		t.Fatal("重复扫描和重启不得重复记录同一次更新")
+	}
+	f.rotate("future", 11*24*time.Hour)
+	f.data["future"]["last_refresh"] = refreshed.Add(time.Minute).Format(time.RFC3339)
+	restarted.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	if countUpdates(restarted) != 2 {
+		t.Fatal("重启后新的凭据更新仍需记录")
+	}
+	stored, _ := os.ReadFile(cfg.StateFile)
+	if strings.Contains(string(stored), "canary") {
+		t.Fatal("观察记录和运行日志不得保存令牌或管理密钥")
+	}
+}
+
+func TestRefreshObserverRunsWithoutConnectionOrAutoRefresh(t *testing.T) {
+	w, _, f := newRefreshFixture(t)
+	f.auths = f.auths[2:3]
+	waitFor := func(check func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(2 * time.Second)
+		for time.Now().Before(deadline) {
+			if check() {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+		t.Fatal("后台观察没有完成")
+	}
+	w.refreshWake <- struct{}{}
+	waitFor(func() bool {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.history.TokenRefresh != nil && len(w.history.TokenRefresh.Observed) == 1
+	})
+	f.rotate("future", 10*24*time.Hour)
+	w.refreshWake <- struct{}{}
+	waitFor(func() bool {
+		for _, entry := range w.Status().History.Logs {
+			if entry.Event == "token_refresh.observed" {
+				return true
+			}
+		}
+		return false
+	})
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.cfg.TokenRefreshEnabled || len(w.history.TokenRefresh.Records) != 0 || cachedConnectionState(w.cfg.StateFile).Cached {
+		t.Fatal("后台观察只应写插件日志，不应启用、触发刷新或依赖连接缓存")
+	}
+}
+
+func TestRefreshObservationMetadataAndAttemptIsolation(t *testing.T) {
+	for _, change := range []string{"last_refresh", "expired"} {
+		t.Run(change, func(t *testing.T) {
+			w, cfg, f := newRefreshFixture(t)
+			f.auths, cfg.TokenRefreshEnabled = f.auths[2:3], false
+			previous := time.Now().Add(-time.Hour).UTC().Truncate(time.Second)
+			f.data["future"]["last_refresh"] = previous.Format(time.RFC3339)
+			w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+			credential := w.readRefreshCredential(f.auths[0])
+			w.mu.Lock()
+			w.refreshJournalLocked().Records["future"] = refreshRecord{Version: credential.Version, State: "failed", AttemptedAt: previous, Error: "保留上次插件失败"}
+			w.mu.Unlock()
+			if change == "last_refresh" {
+				f.data["future"][change] = previous.Add(time.Minute).Format(time.RFC3339)
+			} else {
+				f.data["future"][change] = time.Now().Add(10 * 24 * time.Hour).UTC().Format(time.RFC3339)
+			}
+			var scans sync.WaitGroup
+			for range 3 {
+				scans.Go(func() { w.tokenRefreshCycle(context.Background(), cfg, time.Now()) })
+			}
+			scans.Wait()
+			view, _ := w.tokenRefreshPlan(cfg, time.Now())
+			row := view.Accounts[0]
+			if row.LastRefresh == nil || row.RefreshSource != "cpa" || row.LastResult != "failed" || row.LastError != "保留上次插件失败" || !row.LastAttempt.Equal(previous) {
+				t.Fatal("最近刷新与插件尝试结果应独立保留")
+			}
+			updates := 0
+			for _, entry := range w.Status().History.Logs {
+				if entry.Event == "token_refresh.observed" {
+					updates++
+					if entry.Fields["refresh_source"] != "cpa" || entry.Fields["refreshed_at"] == nil || entry.Fields["planned_at"] == nil {
+						t.Fatal("插件运行日志应包含来源、刷新时间和重排计划")
+					}
+				}
+			}
+			if updates != 1 {
+				t.Fatal("只改变有效期或刷新时间也应记录，并发扫描不能重复写入")
+			}
+		})
+	}
+}
+
+func TestRefreshObserverPreservesBaselineOnReadFailure(t *testing.T) {
+	w, cfg, _ := newRefreshFixture(t)
+	cfg.TokenRefreshEnabled = false
+	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	w.Stop()
+	host := w.host
+	w.host = func(method string, request, response any) error {
+		if method == "host.auth.list" {
+			return fmt.Errorf("模拟账号列表暂时不可用")
+		}
+		return host(method, request, response)
+	}
+	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if len(w.history.TokenRefresh.Observed) != 3 {
+		t.Fatal("读取列表失败不能清空观察基线")
+	}
 }
 
 func TestRefreshConfigurationAndExpiry(t *testing.T) {
@@ -132,9 +296,19 @@ func TestRefreshQueueSerialAndReschedule(t *testing.T) {
 	if view.Error != "" || view.NextAt == nil || !view.NextAt.After(time.Now()) || len(view.Accounts) != 4 {
 		t.Fatalf("应按新凭据重新排期并展示下次时间：%+v", view)
 	}
+	for _, row := range view.Accounts {
+		if row.LastResult == "success" && (row.LastRefresh == nil || row.RefreshSource != "plugin") {
+			t.Fatal("已确认的插件刷新应显示最近刷新时间与插件来源")
+		}
+	}
 	w.tokenRefreshCycle(context.Background(), cfg, time.Now())
 	if len(calls) != 2 {
 		t.Fatal("下一次扫描不得重复刷新")
+	}
+	for _, entry := range w.Status().History.Logs {
+		if entry.Event == "token_refresh.observed" {
+			t.Fatal("插件发起的成功刷新不能重复记为 CPA 外部更新")
+		}
 	}
 	raw, _ := os.ReadFile(cfg.StateFile)
 	if strings.Contains(string(raw), "canary") {
@@ -329,7 +503,7 @@ func TestRefreshLifecycleCancellationAndRestart(t *testing.T) {
 	}
 	f.rotate("b", 10*24*time.Hour)
 	view, _ := w.tokenRefreshPlan(cfg, time.Now())
-	if view.Accounts[0].LastResult != "updated" || view.NextAt == nil || !view.NextAt.After(time.Now()) {
+	if view.Accounts[0].LastResult != "uncertain" || view.Accounts[0].LastRefresh == nil || view.Accounts[0].RefreshSource != "cpa" || view.NextAt == nil || !view.NextAt.After(time.Now()) {
 		t.Fatal("未确认请求若已更新凭据，应采用新有效期")
 	}
 }

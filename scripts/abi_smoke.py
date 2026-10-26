@@ -36,7 +36,7 @@ class FakeCPA:
         self.model_delay = 0
         self.status_codes = {"a": 200, "b": 204}
         now = datetime.now(timezone.utc)
-        self.credentials = {id_: {"type": "codex", "access_token": "fake-access-" + id_, "refresh_token": "fake-refresh-" + id_, "expired": (now + timedelta(days=days)).isoformat()} for id_, days in [("a", 7), ("b", 4)]}
+        self.credentials = {id_: {"type": "codex", "access_token": "fake-access-" + id_, "refresh_token": "fake-refresh-" + id_, "expired": (now + timedelta(days=days)).isoformat(), "last_refresh": (now - timedelta(days=2)).isoformat()} for id_, days in [("a", 7), ("b", 4)]}
         self.callback = HostCall(self.host_call)
         self.free_callback = Free(self.host_free)
         self.host = HostAPI(1, None, self.callback, self.free_callback)
@@ -136,7 +136,29 @@ def main():
         plan = json.loads(raw)
         assert code == 200 and plan["enabled"] is False and plan["lead_hours"] == 120
         assert len(plan["accounts"]) == 3 and all(row.get("expires_at") and row.get("planned_at") for row in plan["accounts"] if row["id"] != "disabled")
+        assert all(row.get("last_refresh") and row.get("refresh_source") == "cpa" and not row.get("last_attempt") for row in plan["accounts"] if row["id"] != "disabled")
         assert b"fake-access" not in raw and b"fake-refresh" not in raw, "刷新计划不得输出账号令牌"
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            if "a" in json.loads(state.read_text()).get("token_refresh", {}).get("observed", {}):
+                break
+            time.sleep(0.01)
+        else:
+            raise AssertionError("后台观察未建立基线")
+        now = datetime.now(timezone.utc)
+        cpa.credentials["a"] = {**cpa.credentials["a"], "access_token": "fake-external-update", "last_refresh": now.isoformat(), "expired": (now + timedelta(days=10)).isoformat()}
+        assert cpa.management("POST", base + "/connection", b'{"url":"http://127.0.0.1:8317"}', headers={"Authorization": ["Bearer fake-cache-key"]})[0] == 200
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            _, raw_logs = cpa.management("GET", base + "/logs")
+            observed = [row for row in json.loads(raw_logs)["logs"] if row["event"] == "token_refresh.observed"]
+            if observed:
+                break
+            time.sleep(0.01)
+        else:
+            raise AssertionError("CPA 更新未写入插件运行日志")
+        assert len(observed) == 1 and observed[0]["fields"]["refresh_source"] == "cpa" and not cpa.requests
+        assert "fake-external-update" not in raw_logs.decode(), "插件运行日志不得输出令牌"
         code, raw = cpa.management("GET", base + "/accounts")
         accounts = json.loads(raw)["accounts"]
         assert code == 200 and [a["id"] for a in accounts] == ["a", "b", "disabled"]
