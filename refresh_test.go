@@ -429,6 +429,39 @@ func TestRefreshBackoffAndPermanentFailure(t *testing.T) {
 	}
 }
 
+func TestRefreshQueueDistinguishesNotFound(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		wantCalls  int32
+		wantHold   bool
+	}{
+		{"missing_account", `{"error":"auth file not found"}`, 2, false},
+		{"missing_route", "404 page not found", 1, true},
+		{"unknown_json_error", `{"error":"not found"}`, 1, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, cfg, f := newRefreshFixture(t)
+			var calls atomic.Int32
+			server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, _ *http.Request) {
+				if calls.Add(1) == 1 {
+					rw.WriteHeader(http.StatusNotFound)
+					_, _ = rw.Write([]byte(tc.body))
+					return
+				}
+				f.rotate("a", 10*24*time.Hour)
+				_, _ = rw.Write([]byte(`{"ok":true}`))
+			}))
+			defer server.Close()
+			cfg.TokenRefreshURL = server.URL
+			w.tokenRefreshCycle(context.Background(), cfg, time.Now())
+			view, _ := w.tokenRefreshPlan(cfg, time.Now())
+			if gotCalls, held := calls.Load(), view.Error != ""; gotCalls != tc.wantCalls || held != tc.wantHold {
+				t.Fatalf("刷新请求数 = %d，队列暂停 = %t，期望 %d 和 %t", gotCalls, held, tc.wantCalls, tc.wantHold)
+			}
+		})
+	}
+}
+
 func TestRefreshRedirectAndStateProtection(t *testing.T) {
 	var forwarded atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { forwarded.Add(1) }))

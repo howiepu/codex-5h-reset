@@ -521,6 +521,12 @@ func requestTokenRefresh(ctx context.Context, cfg config, auth authEntry) refres
 		return refreshOutcome{Error: "CPA 拒绝后台管理认证，队列已暂停；请在顶部连接设置中重新连接", Hold: true}
 	}
 	if response.StatusCode == http.StatusNotFound || (response.StatusCode >= 300 && response.StatusCode < 400) {
+		var failure struct {
+			Error string `json:"error"`
+		}
+		if response.StatusCode == http.StatusNotFound && json.Unmarshal(raw, &failure) == nil && failure.Error == "auth file not found" {
+			return refreshOutcome{Error: "CPA 找不到该账号，等待重新扫描"}
+		}
 		return refreshOutcome{Error: "CPA 刷新接口不可用或发生重定向，队列已暂停；请检查后台管理地址和 CPA 版本", Hold: true}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
