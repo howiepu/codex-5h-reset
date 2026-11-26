@@ -122,7 +122,7 @@ node scripts/ui_settings_smoke.mjs
 node scripts/ui_quota_smoke.mjs
 mkdir -p dist
 go build -buildmode=c-shared -o dist/codex-5h-reset.dylib .
-python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.6
+python3 scripts/abi_smoke.py dist/codex-5h-reset.dylib 0.1.8
 python3 scripts/ui_server_smoke.py dist/codex-5h-reset.dylib
 ```
 
