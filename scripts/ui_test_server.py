@@ -84,6 +84,14 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/v8/management/config/server" and self.command == "GET":
             self.send(200, json.dumps({"host": "127.0.0.1", "port": server.server_port, "tls": {"enable": False}}).encode())
             return
+        if parsed.path == "/v8/management/requests/api-call" and self.command == "POST":
+            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
+            id_ = body["auth_index"]
+            assert body["url"] == "https://chatgpt.com/backend-api/wham/usage" and id_ in cpa.credentials
+            now = datetime.now(timezone.utc)
+            usage = {"rate_limit": {"primary_window": {"used_percent": 85 if id_ == "a" else 40, "limit_window_seconds": 18000, "reset_at": int((now + timedelta(hours=2)).timestamp())}, "secondary_window": {"used_percent": 30, "limit_window_seconds": 604800, "reset_at": int((now + timedelta(days=4)).timestamp())}}}
+            self.send(200, json.dumps({"status_code": 200, "body": json.dumps(usage)}).encode())
+            return
         if parsed.path == "/v0/management/auth-files/refresh" and self.command == "POST":
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))))
             id_ = body["auth_index"]

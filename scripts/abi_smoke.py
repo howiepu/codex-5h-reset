@@ -37,6 +37,8 @@ class FakeCPA:
         self.status_codes = {"a": 200, "b": 204}
         now = datetime.now(timezone.utc)
         self.credentials = {id_: {"type": "codex", "access_token": "fake-access-" + id_, "refresh_token": "fake-refresh-" + id_, "expired": (now + timedelta(days=days)).isoformat(), "last_refresh": (now - timedelta(days=2)).isoformat()} for id_, days in [("a", 7), ("b", 4)]}
+        for id_, credential in self.credentials.items():
+            credential["account_id"] = "fake-account-" + id_
         self.callback = HostCall(self.host_call)
         self.free_callback = Free(self.host_free)
         self.host = HostAPI(1, None, self.callback, self.free_callback)
@@ -59,9 +61,13 @@ class FakeCPA:
             elif method == "host.auth.models":
                 result = {"credentials": [{"id": "a", "provider": "codex", "models": ["gpt-5.6-luna", "gpt-6-luna"]}, {"id": "b", "provider": "codex", "models": ["gpt-6-luna"]}, {"id": "disabled", "provider": "codex", "models": []}]}
             elif method == "host.model.execute":
-                self.requests.append(request)
-                time.sleep(self.model_delay)
-                result = {"status_code": self.status_codes[request["auth_id"]], "body": base64.b64encode(b"not a generated completion").decode()}
+                picked = self.call("scheduler.pick", {"Candidates": [{"ID": request["auth_id"], "Provider": "codex"}], "Options": {"Metadata": {"caller_scope": request.get("caller_scope", "")}}})
+                if request["auth_id"] in picked["exclude_candidates"]:
+                    result = {"status_code": 429}
+                else:
+                    self.requests.append(request)
+                    time.sleep(self.model_delay)
+                    result = {"status_code": self.status_codes[request["auth_id"]], "body": base64.b64encode(b"not a generated completion").decode()}
             elif method == "host.log":
                 result = {}
             else:
@@ -202,10 +208,26 @@ def main():
         assert cpa.management("POST", base + "/run")[0] == 409
         cpa.call("plugin.reconfigure", lifecycle)
         assert json.loads(cpa.management("GET", base + "/status")[1])["history"]["last_run"]
+        cpa.call("plugin.quiesce")
+        Path(str(state) + ".connection.json").unlink()
+        protected = config + "quota_guard_enabled: true\nquota_guard_accounts: {a: {five_hour_min_remaining: 20, weekly_min_remaining: 10}}\n"
+        registration = cpa.call("plugin.reconfigure", {"config_yaml": base64.b64encode(protected.encode()).decode()})
+        assert registration["capabilities"]["scheduler"] and registration["capabilities"]["usage_plugin"]
+        before = len(cpa.requests)
+        code, raw = cpa.management("POST", base + "/run", b'{"auth_ids":["a"]}')
+        assert code == 200 and json.loads(raw)["results"][0]["status"] == "skipped" and len(cpa.requests) == before
+        cpa.call("plugin.reconfigure", {"config_yaml": base64.b64encode((protected + "warmup_quota_check: false\n").encode()).decode()})
+        code, raw = cpa.management("POST", base + "/run", b'{"auth_ids":["a"]}')
+        assert code == 200 and json.loads(raw)["results"][0]["success"] and len(cpa.requests) == before + 1
+        scope = cpa.requests[-1]["caller_scope"]
+        assert scope and "X-Codex-5H-Reset-Quota-Bypass" not in cpa.requests[-1]["headers"]
+        for replay in ["", scope, "forged-warmup"]:
+            selection = cpa.call("scheduler.pick", {"Candidates": [{"ID": "a", "Provider": "codex"}], "Options": {"Metadata": {"caller_scope": replay}}})
+            assert selection == {"handled": False, "exclude_candidates": ["a"]}, selection
         cpa.call("plugin.shutdown")
         cpa.api.shutdown()
         assert not cpa.buffers and cpa.allocations == cpa.frees and not cpa.errors, cpa.errors
-    print("ABI 验证通过：真实共享库注册、管理路由、逐账号消息、2xx 判定、持久化与停止。")
+    print("ABI 验证通过：共享库、管理路由、预热额度开关、内部临时授权与普通请求保护、持久化与停止。")
 
 
 if __name__ == "__main__":

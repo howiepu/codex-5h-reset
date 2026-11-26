@@ -39,7 +39,7 @@ const context = vm.createContext({
 });
 vm.runInContext(models + functions + submit, context);
 const original = {
-  enabled: true, priority: 7, store: {repository: "test-source"},
+  enabled: true, priority: 7, store: {repository: "test-source"}, warmup_quota_check: true,
   model: "test-model", prompt: "keep this fixed message", timezone: "Asia/Singapore",
   max_log_entries: 200, state_file: "test-history.json", history_retention_days: 30,
   schedules: [], notify_webhook_url: "", notify_bark_url: "",
@@ -47,6 +47,11 @@ const original = {
   notify_webhook_headers: {Authorization: "Bearer fake-saved-header"},
   notify_webhook_body: '{"body":"{{notification}}","format":"text"}',
 };
+context.fillConfig(original, {});
+assert.equal(nodes.get("warmupQuotaCheck").checked, true);
+nodes.get("warmupQuotaCheck").checked = false;
+nodes.get("settings").listeners.submit({preventDefault() {}}); await pending;
+assert.equal(saved.at(-1).warmup_quota_check, false, "预热跳过检查必须持久化为 false");
 context.fillConfig(original, {});
 const mode = nodes.get("randomArithmetic"), prompt = nodes.get("prompt");
 for (const random of [true, false]) {

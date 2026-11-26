@@ -35,6 +35,9 @@
     h1 { font-size: 26px; line-height: 1.3; font-weight: 650; letter-spacing: -.035em; text-wrap: balance; scroll-margin-top: 16px; }
     h2 { font-size: 14px; font-weight: 600; }
     .muted, small { color: var(--muted-foreground); }
+    label.check.quota-check { min-block-size: 44px; margin: 0; }
+    #quotaRules { display: grid; gap: 16px; }
+    .quota-rule .channel-heading h3 { overflow-wrap: anywhere; }
     .app { width: min(1120px, 100%); min-width: 0; margin: auto; }
     .skip-link { position: fixed; top: 8px; left: 8px; z-index: 10; padding: 8px 12px; border-radius: 6px; background: var(--primary); color: var(--primary-foreground); transform: translateY(-150%); }
     .skip-link:focus { transform: translateY(0); }
@@ -143,7 +146,7 @@
     .refresh-summary strong { display: block; margin: 7px 0 4px; font-size: 20px; font-weight: 600; letter-spacing: -.02em; overflow-wrap: anywhere; }
     .duration-input { display: grid; grid-template-columns: minmax(0, 1fr) 96px; gap: 8px; max-width: 360px; }
     .duration-input select { height: 36px; }
-    #tokenRefreshError { margin: 0 20px 20px; }
+    #tokenRefreshError, #quotaError { margin: 0 20px 20px; }
     #runProgress { margin: 0 0 18px; padding: 14px 18px; overflow-wrap: anywhere; }
     #runProgress .row { align-items: center; justify-content: space-between; }
     progress { display: block; width: 100%; height: 8px; margin: 12px 0; accent-color: var(--primary); }
@@ -164,7 +167,7 @@
       .settings-section { padding: 20px 16px; }
       .grid, .mode-switch { grid-template-columns: minmax(0, 1fr); gap: 16px; }
       .refresh-summary { grid-template-columns: minmax(0, 1fr); padding: 20px 16px; }
-      #tokenRefreshError { margin: 0 16px 16px; }
+      #tokenRefreshError, #quotaError { margin: 0 16px 16px; }
       .notification-channel { padding: 16px; }
       .webhook-target { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .webhook-url { grid-column: 1 / -1; }
@@ -216,6 +219,7 @@
     <button id="tab-results" type="button" data-view="results" aria-controls="view-results"><svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-17a3 3 0 0 1 0 6m1 5a5 5 0 0 1 3 4v2"/></svg>账号结果</button>
     <button id="tab-tokens" type="button" data-view="tokens" aria-controls="view-tokens"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></svg>令牌刷新</button>
     <button id="tab-settings" type="button" data-view="settings" aria-controls="view-settings"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg>预热设置</button>
+    <button id="tab-quota" type="button" data-view="quota" aria-controls="view-quota"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-8 10-8 10S4 16 4 11V6l8-3z"/><path d="m8 12 3 3 5-6"/></svg>额度保护</button>
   </nav>
   <div class="page-heading"><h1 id="viewTitle" tabindex="-1">运行日志</h1></div>
   <p id="storageError" role="alert" hidden></p>
@@ -244,6 +248,17 @@
       <div class="form-actions"><small id="tokenSaveHint">未连接</small><button id="saveTokenRefresh" class="primary" type="submit">保存刷新设置</button></div>
     </fieldset></form>
   </section>
+  <section id="view-quota" class="view" data-view-panel="quota" aria-labelledby="tab-quota" hidden>
+    <div class="card"><div class="card-header"><h2>额度状态</h2><span id="quotaState" class="badge" role="status">未连接</span></div><p id="quotaError" class="notification-feedback error" role="alert" hidden></p><div id="quotaAccounts" class="table-wrap"><p class="empty">连接后查看额度</p></div></div>
+    <form id="quotaSettings" class="card" aria-labelledby="quotaHeading" autocomplete="off"><fieldset id="quotaFields" disabled>
+      <section class="settings-section" aria-labelledby="quotaHeading">
+        <div class="section-heading"><div><h2 id="quotaHeading">保护规则</h2></div><label class="check quota-check"><input id="quotaEnabled" name="quota_guard_enabled" type="checkbox">启用</label></div>
+        <div id="quotaRules"></div>
+        <small id="quotaHelp">0% 表示不检查该窗口。</small>
+      </section>
+      <div class="form-actions"><small id="quotaSaveHint" role="status">未连接</small><button id="saveQuota" class="primary" type="submit">保存保护设置</button></div>
+    </fieldset></form>
+  </section>
   <section id="view-settings" class="view" data-view-panel="settings" aria-labelledby="tab-settings" hidden>
     <form id="settings" class="card" autocomplete="off"><fieldset id="settingsFields" disabled>
       <section class="settings-section" aria-labelledby="messageHeading">
@@ -260,6 +275,7 @@
         <div class="section-heading"><div><h2 id="scheduleHeading">每日计划</h2></div><button id="add" type="button"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>添加时刻</button></div>
         <div class="field"><label for="timezone">执行时区</label><input id="timezone" name="timezone" placeholder="例如 Asia/Singapore…" spellcheck="false" required></div>
         <div id="schedules"></div>
+        <div class="field"><label class="check quota-check"><input id="warmupQuotaCheck" name="warmup_quota_check" type="checkbox" checked aria-describedby="warmupQuotaHelp">预热前检查额度</label><small id="warmupQuotaHelp">关闭后仅预热可使用保留额度。</small></div>
       </section>
       <section class="settings-section" aria-labelledby="historyHeading">
         <div class="section-heading"><div><h2 id="historyHeading">历史与归档</h2></div></div>
@@ -296,16 +312,19 @@ const $ = id => document.getElementById(id);
 let configuration = null, currentStatus = null, connected = false, submitting = false, settingsDirty = false;
 let accounts = [], logEntries = [], pollTimer, statusRequest, pendingRun, logsSignature = "", resultsSignature = "";
 let tokenSettingsDirty = false, tokenStatus = null, activeView = "logs", tokenRequest;
+let quotaSettingsDirty = false;
 const selected = new Set();
 const views = {
   logs: "运行日志",
   status: "运行状态",
   results: "账号结果",
   tokens: "令牌刷新",
-  settings: "预热设置"
+  settings: "预热设置",
+  quota: "额度保护"
 };
 const eventNames = {"configuration.updated": "配置加载", "schedule.planned": "计划安排", "schedule.triggered": "定时触发", "schedule.skipped": "计划跳过", "warmup.started": "开始预热", "warmup.selection": "账号选择", "warmup.no_credentials": "无可用账号", "warmup.credential_started": "账号开始", "warmup.credential": "账号结果", "warmup.finished": "本轮结束", "notification.sent": "通知已发送", "notification.failed": "通知失败"};
 Object.assign(eventNames, {"token_refresh.started": "令牌刷新", "token_refresh.success": "令牌已更新", "token_refresh.failed": "令牌刷新异常", "token_refresh.observed": "CPA 凭据更新"});
+Object.assign(eventNames, {"quota_guard.paused": "额度保护", "quota_guard.recovered": "额度恢复"});
 const fieldNames = {run_id: "轮次 ID", source: "触发来源", auth_id: "账号 ID", label: "账号名称", model: "模型", status_code: "HTTP 状态", success: "请求成功", duration_ms: "耗时（ms）", error_kind: "错误分类", auth_total: "凭证总数", codex_total: "Codex 账号数", selected_count: "本轮选择数", skipped_disabled: "跳过禁用数", skipped_missing_id: "跳过缺少 ID 数", reported_unavailable: "列表中 CPA 标记不可用数（可选，交 CPA 判断）", reported_inactive: "列表中 CPA 非 active 数（可选，交 CPA 判断）", credential_count: "本轮账号数", success_count: "成功数", failure_count: "失败数", skipped_count: "未发送数", schedule_id: "日程", scheduled_at: "计划时间", channel: "通知渠道"};
 Object.assign(fieldNames, {refresh_source: "刷新来源", refreshed_at: "最近刷新", expires_at: "令牌到期", planned_at: "计划刷新"});
 function showView(view) {
@@ -346,7 +365,7 @@ async function request(path, options = {}) {
     try { data = JSON.parse(text); } catch (_) { throw new Error("CPA 返回非 JSON 响应，HTTP " + response.status); }
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        connected = false; clearTimeout(pollTimer); renderControls(); $("connection").open = true; $("settingsFields").disabled = true; $("tokenRefreshFields").disabled = true;
+        connected = false; clearTimeout(pollTimer); renderControls(); $("connection").open = true; $("settingsFields").disabled = true; $("tokenRefreshFields").disabled = true; $("quotaFields").disabled = true;
         if (response.status === 401) {
           try { localStorage.removeItem(storageKey); sessionStorage.removeItem(storageKey); } catch (_) { /* 存储可能不可用。 */ }
         }
@@ -364,9 +383,9 @@ async function request(path, options = {}) {
 function table(target, headings, rows, keys = []) {
   const container = $(target); container.replaceChildren();
   if (!rows.length) { const empty = document.createElement("p"); empty.className = "empty"; empty.textContent = "暂无记录。"; container.append(empty); return; }
-  const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : target === "tokenRefreshAccounts" ? "账号令牌刷新计划" : "账号结果");
+  const table = document.createElement("table"); table.className = "data-table"; table.setAttribute("role", "table"); table.setAttribute("aria-label", target === "logs" ? "运行日志" : target === "tokenRefreshAccounts" ? "账号令牌刷新计划" : target === "quotaAccounts" ? "账号额度保护" : "账号结果");
   const cols = document.createElement("colgroup");
-  (target === "logs" ? [15, 8, 13, 20, 29, 15] : target === "tokenRefreshAccounts" ? [17, 16, 16, 10, 16, 13, 12] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
+  (target === "logs" ? [15, 8, 13, 20, 29, 15] : target === "tokenRefreshAccounts" ? [17, 16, 16, 10, 16, 13, 12] : target === "quotaAccounts" ? [20, 13, 13, 12, 18, 24] : [24, 18, 12, 8, 10, 28]).forEach(width => { const col = document.createElement("col"); col.style.width = width + "%"; cols.append(col); }); table.append(cols);
   const head = table.createTHead().insertRow();
   headings.forEach(title => { const th = document.createElement("th"); th.scope = "col"; th.textContent = title; head.append(th); });
   const body = table.createTBody();
@@ -377,10 +396,10 @@ function table(target, headings, rows, keys = []) {
     else if (text.length > 180) content = expandable(text, text.slice(0, 72) + "…");
     else { content = document.createElement("span"); content.textContent = text; }
     td.dataset.label = headings[index]; content.classList.add("cell-content");
-    if ((target === "logs" && index === 1) || (target === "results" && index === 2) || (target === "tokenRefreshAccounts" && index === 3)) {
+    if ((target === "logs" && index === 1) || (target === "results" && index === 2) || ((target === "tokenRefreshAccounts" || target === "quotaAccounts") && index === 3)) {
       content.classList.add("badge");
       if (value === "error" || value === "失败") content.classList.add("error");
-      else if (value === "warn" || value === "结果未确认") content.classList.add("warn");
+      else if (value === "warn" || value === "结果未确认" || value === "保护中") content.classList.add("warn");
     }
     td.append(content);
   }); });
@@ -396,7 +415,7 @@ function duration(ms) { return ms < 1000 ? ms + " ms" : (ms / 1000).toFixed(1) +
 function sourceName(value) { return value === "manual" ? "手动预热" : value?.startsWith("schedule:") ? "定时 · " + value.slice(9) : value || "—"; }
 function resultName(r) {
   if (r.error_kind === "uncertain") return "结果未确认";
-  return {queued: "等待发送", running: "执行中", success: "成功", failed: "失败", stopped: "未发送"}[r.status] || (r.success ? "成功" : "失败");
+  return {queued: "等待发送", running: "执行中", success: "成功", failed: "失败", stopped: "未发送", skipped: "额度保护跳过"}[r.status] || (r.success ? "成功" : "失败");
 }
 function renderControls() {
   const busy = !connected || submitting || currentStatus?.running, enabled = currentStatus?.configuration.enabled;
@@ -411,6 +430,7 @@ function renderControls() {
   $("stopRun").disabled = !connected || submitting || p?.stop_requested;
   $("stopRun").textContent = p?.stop_requested ? "正在停止…" : "停止本轮";
   $("tokenRefreshFields").disabled = !connected;
+  $("quotaFields").disabled = !connected;
 }
 function renderStatus(data) {
   currentStatus = data;
@@ -425,9 +445,9 @@ function renderStatus(data) {
   $("storageError").hidden = !$("storageError").textContent;
   $("runProgress").hidden = !p;
   if (p) {
-    $("progressTitle").textContent = data.running ? p.finished_at ? "正在完成本轮记录" : p.stop_requested ? "等待当前请求结束后停止" : "正在逐账号预热" : p.error ? "本轮异常结束" : p.skipped ? "本轮已停止" : p.total ? "本轮已结束" : "本轮没有可执行账号";
-    $("progressCount").textContent = p.completed + " / " + p.total;
-    $("progressBar").max = Math.max(1, p.total); $("progressBar").value = p.completed;
+    $("progressTitle").textContent = data.running ? p.finished_at ? "正在完成本轮记录" : p.stop_requested ? "等待当前请求结束后停止" : "正在逐账号预热" : p.error ? "本轮异常结束" : p.stop_requested ? "本轮已停止" : p.total ? "本轮已结束" : "本轮没有可执行账号";
+    $("progressCount").textContent = (p.completed + p.skipped) + " / " + p.total;
+    $("progressBar").max = Math.max(1, p.total); $("progressBar").value = p.completed + p.skipped;
     const active = (history.last_results || []).find(r => r.status === "running");
     const elapsed = Math.max(0, new Date(p.finished_at || Date.now()) - new Date(p.started_at));
     $("progressMessage").textContent = p.error || p.succeeded + " 成功 · " + p.failed + " 失败 · " + p.skipped + " 未发送 · " + duration(elapsed) + (active ? " · 当前：" + (active.label || active.auth_id) : "");
@@ -437,6 +457,7 @@ function renderStatus(data) {
     resultsSignature = signature;
     table("results", ["账号", "模型", "结果", "HTTP", "耗时", "说明"], (history.last_results || []).map(r => [r.label || r.auth_id, r.model, resultName(r), r.status_code || "—", r.finished_at ? duration(r.duration_ms || 0) : "—", r.error || (r.status === "stopped" ? "停止后未发送请求" : "—")]));
   }
+  renderQuotaStatus(data.quota_guard);
   renderControls();
 }
 function renderModelHint() {
@@ -542,6 +563,7 @@ function fillConfig(cfg, fallback) {
   for (const name of ["model", "prompt", "timezone"]) $(name).value = values[name];
   renderModelHint();
   $("randomArithmetic").checked = values.random_arithmetic === true; updatePromptMode();
+  $("warmupQuotaCheck").checked = values.warmup_quota_check !== false;
   $("maxLogs").value = values.max_log_entries; $("stateFile").value = values.state_file;
   $("retentionDays").value = values.history_retention_days ?? 30;
   $("webhookURL").value = values.notify_webhook_url || ""; $("barkURL").value = values.notify_bark_url || "";
@@ -667,7 +689,7 @@ async function loadAll() {
   const data = await request(base + "/status");
   const [cfg, listed, logs] = await Promise.all([request(base + "/config"), request(base + "/accounts"), request(base + "/logs" + (day ? "?day=" + encodeURIComponent(day) : ""))]);
   connected = true; renderStatus(data); fillConfig(cfg, data.configuration);
-  accounts = listed.accounts || []; logEntries = logs.logs || []; renderAccounts(); renderLogs();
+  accounts = listed.accounts || []; logEntries = logs.logs || []; renderAccounts(); renderLogs(); fillQuotaConfig(cfg, data.configuration);
   $("connectionState").textContent = "已连接 CPA"; $("settingsFields").disabled = false; $("tokenRefreshFields").disabled = false; $("refresh").disabled = false;
   if (activeView === "tokens") await loadTokenRefresh();
   document.querySelectorAll("[data-needs-connection]").forEach(node => { node.hidden = true; }); schedulePoll();
@@ -707,7 +729,7 @@ $("settings").addEventListener("submit", event => {
   event.preventDefault();
   action($("save"), "正在保存…", async () => {
     if (!configuration) throw new Error("请先读取配置");
-    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), ...readNotificationConfig()};
+    const cfg = {...configuration, model: $("model").value.trim(), prompt: $("prompt").value.trim(), random_arithmetic: $("randomArithmetic").checked, warmup_quota_check: $("warmupQuotaCheck").checked, timezone: $("timezone").value.trim(), max_log_entries: Number($("maxLogs").value), state_file: $("stateFile").value.trim(), history_retention_days: Number($("retentionDays").value), ...readNotificationConfig()};
     delete cfg.notify_webhook_username; delete cfg.notify_webhook_password;
     delete cfg.token_refresh_management_key; delete cfg.token_refresh_management_url;
     cfg.schedules = Array.from($("schedules").children, row => ({id: row.querySelector('[data-field="id"]').value.trim(), at: row.querySelector('[data-field="at"]').value, enabled: row.querySelector('[data-field="enabled"]').checked}));
@@ -740,6 +762,71 @@ $("tokenRefreshSettings").addEventListener("submit", event => {
     await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
     configuration = cfg; tokenSettingsDirty = false; $("tokenSaveHint").textContent = "已保存";
     await loadTokenRefresh(); notice(cfg.token_refresh_enabled ? "自动刷新已开启" : "自动刷新已关闭");
+  });
+});
+function renderQuotaStatus(data = {enabled: false, accounts: []}) {
+  $("quotaError").textContent = data.error || ""; $("quotaError").hidden = !data.error;
+  $("quotaState").textContent = data.error ? "查询暂停" : data.enabled ? "已开启" : "未开启";
+  $("quotaState").className = "badge" + (data.error ? " error" : "");
+  const labels = new Map(accounts.map(account => [account.id, account.label || account.name || account.id]));
+  const remaining = window => window ? window.remaining.toFixed(2) + "%" : "未提供";
+  const checked = value => value && !value.startsWith("0001-") ? formatTime(value, currentStatus?.configuration.timezone || "Asia/Singapore") : "尚未检查";
+  table("quotaAccounts", ["账号", "5 小时剩余", "周剩余", "保护状态", "最近检查", "说明"], (data.accounts || []).map(row => [labels.get(row.id) || row.id, remaining(row.five_hour), remaining(row.weekly), !data.enabled ? "未开启" : row.paused ? "保护中" : "可使用", checked(row.checked_at), [row.reason, row.error].filter(Boolean).join("；") || "—"]));
+}
+function fillQuotaConfig(cfg, fallback = {}) {
+  if (quotaSettingsDirty) return;
+  const values = {...fallback, ...cfg}, rules = values.quota_guard_accounts || {};
+  $("quotaEnabled").checked = values.quota_guard_enabled === true;
+  $("quotaSaveHint").textContent = "已保存";
+  $("quotaRules").replaceChildren();
+  const listed = new Map(accounts.map(account => [account.id, account]));
+  const ids = new Set([...listed.keys(), ...Object.keys(rules)]);
+  let index = 0;
+  for (const id of ids) {
+    const account = listed.get(id), rule = Object.hasOwn(rules, id) ? rules[id] : undefined;
+    const row = document.createElement("div"), heading = document.createElement("div"), title = document.createElement("div"), name = document.createElement("h3");
+    row.className = "notification-channel quota-rule"; row.dataset.id = id; row.setAttribute("role", "group");
+    name.id = "quotaAccount_" + index; row.setAttribute("aria-labelledby", name.id); title.className = "channel-heading"; heading.className = "section-heading";
+    name.textContent = (account?.label || account?.name || id) + (account ? account.disabled ? " · 已停用" : "" : " · 未连接"); title.append(name);
+    const label = document.createElement("label"), enabled = document.createElement("input");
+    label.className = "check quota-check"; enabled.type = "checkbox"; enabled.name = "quota_account_" + index; enabled.dataset.field = "enabled"; enabled.checked = !!rule;
+    label.append(enabled, document.createTextNode("保护")); heading.append(title, label); row.append(heading);
+    const grid = document.createElement("div"); grid.className = "grid";
+    for (const [field, title, defaultValue] of [["five_hour_min_remaining", "5 小时保留（%）", 20], ["weekly_min_remaining", "每周保留（%）", 10]]) {
+      const item = document.createElement("div"), name = document.createElement("label"), input = document.createElement("input");
+      item.className = "field"; input.id = "quota_" + index + "_" + field; input.name = input.id; input.dataset.field = field; input.type = "number"; input.min = "0"; input.max = "99"; input.step = "any"; input.inputMode = "decimal"; input.required = true; input.disabled = !rule; input.setAttribute("aria-describedby", "quotaHelp");
+      input.value = rule?.[field] ?? defaultValue; name.htmlFor = input.id; name.textContent = title; item.append(name, input); grid.append(item);
+    }
+    enabled.addEventListener("change", () => { for (const input of grid.querySelectorAll("input")) input.disabled = !enabled.checked; });
+    row.append(grid); $("quotaRules").append(row); index++;
+  }
+  $("quotaFields").disabled = !connected;
+}
+function readQuotaRules() {
+  const rules = {};
+  for (const row of $("quotaRules").children) {
+    if (!row.querySelector('[data-field="enabled"]').checked) continue;
+    const rule = {};
+    for (const field of ["five_hour_min_remaining", "weekly_min_remaining"]) {
+      const value = row.querySelector('[data-field="' + field + '"]').value;
+      if (value.trim() === "" || !Number.isFinite(Number(value)) || Number(value) < 0 || Number(value) > 99) throw new Error("额度下限必须在 0 到 99% 之间");
+      rule[field] = Number(value);
+    }
+    if (!rule.five_hour_min_remaining && !rule.weekly_min_remaining) throw new Error("受保护账号至少需要设置一个非零下限");
+    Object.defineProperty(rules, row.dataset.id, {value: rule, enumerable: true});
+  }
+  return rules;
+}
+function markQuotaDirty() { quotaSettingsDirty = true; $("quotaSaveHint").textContent = "未保存"; }
+$("quotaSettings").addEventListener("input", markQuotaDirty); $("quotaSettings").addEventListener("change", markQuotaDirty);
+$("quotaSettings").addEventListener("submit", event => {
+  event.preventDefault();
+  action($("saveQuota"), "正在保存额度保护…", async () => {
+    if (!configuration) throw new Error("请先连接并读取配置");
+    const cfg = {...configuration, quota_guard_enabled: $("quotaEnabled").checked, quota_guard_accounts: readQuotaRules()};
+    await request(base + "/config", {method: "PUT", body: JSON.stringify(cfg)});
+    configuration = cfg; quotaSettingsDirty = false; $("quotaSaveHint").textContent = "已保存";
+    await refreshStatus(); notice("额度保护已保存，后台将重新确认额度。");
   });
 });
 async function startManual(authIDs) {

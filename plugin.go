@@ -58,7 +58,11 @@ func dispatch(w *warmer, method string, raw []byte) (any, error) {
 			return nil, err
 		}
 		w.Configure(cfg)
-		return registration(), nil
+		return registration(cfg), nil
+	case "scheduler.pick":
+		return w.quotaPick(raw)
+	case "usage.handle":
+		return struct{}{}, w.observeQuotaUsage(raw)
 	case "plugin.quiesce", "plugin.shutdown":
 		w.Stop()
 		return struct{}{}, nil
@@ -87,7 +91,7 @@ func dispatch(w *warmer, method string, raw []byte) (any, error) {
 	}
 }
 
-func registration() any {
+func registration(cfg config) any {
 	return map[string]any{
 		"schema_version": 1,
 		"metadata": map[string]any{
@@ -96,6 +100,9 @@ func registration() any {
 				{"Name": "model", "Type": "string", "Description": "预热使用的 Codex 模型"},
 				{"Name": "prompt", "Type": "string", "Description": "发送给每个账号的消息"},
 				{"Name": "random_arithmetic", "Type": "boolean", "Description": "每次账号请求发送随机算术题，启用后忽略 prompt，默认关闭"},
+				{"Name": "warmup_quota_check", "Type": "boolean", "Description": "预热前检查额度，默认开启；关闭只允许预热跳过额度保护"},
+				{"Name": "quota_guard_enabled", "Type": "boolean", "Description": "开启指定 Codex 账号的额度保护，需要 CPA v8.1.4 或更新版本"},
+				{"Name": "quota_guard_accounts", "Type": "object", "Description": "按凭证 ID 设置 five_hour_min_remaining、weekly_min_remaining；百分比 0 关闭对应窗口检查"},
 				{"Name": "timezone", "Type": "string", "Description": "每日定时使用的 IANA 时区"},
 				{"Name": "schedules", "Type": "array", "Description": "每日计划：id、at（HH:MM）、enabled"},
 				{"Name": "max_log_entries", "Type": "integer", "Description": "保留的日志数，1–2000"},
@@ -111,7 +118,7 @@ func registration() any {
 				{"Name": "notify_bark_url", "Type": "string", "Description": "可选：Bark 推送地址，含设备 key"},
 			},
 		},
-		"capabilities": map[string]bool{"management_api": true},
+		"capabilities": map[string]bool{"management_api": true, "scheduler": cfg.Enabled && cfg.QuotaGuardEnabled, "scheduler_across_priorities": true, "usage_plugin": cfg.Enabled && cfg.QuotaGuardEnabled},
 	}
 }
 

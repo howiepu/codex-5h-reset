@@ -4,6 +4,15 @@ model: gpt-5.6-luna
 prompt: "HI! Tell me the current time, in YYYY-MM-DD format."
 # 开启后每次账号请求生成一道随机算术题，忽略 prompt；默认保留固定发送内容。
 random_arithmetic: false
+# 开启时手动和定时预热遵守下方额度保护；关闭只允许预热跳过，不影响普通调用。
+warmup_quota_check: true
+# 额度保护需要 CPA v8.1.4 或更新版本；默认关闭，通过插件页面选择账号。
+quota_guard_enabled: false
+quota_guard_accounts: {}
+# quota_guard_accounts:
+#   "CPA 实际凭证 ID":
+#     five_hour_min_remaining: 20
+#     weekly_min_remaining: 10
 timezone: Asia/Singapore
 schedules:
   - id: 早

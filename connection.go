@@ -101,6 +101,8 @@ func (w *warmer) cacheConnection(req managementRequest) error {
 		return errors.New("后台连接缓存写入失败，请检查持久目录的权限和空间")
 	}
 	w.mu.Lock()
+	w.quotaVerified = map[string]bool{}
+	w.quotaHold = ""
 	if journal := w.history.TokenRefresh; journal != nil && journal.Hold != "" {
 		journal.Hold = ""
 		w.persistLocked()
@@ -108,6 +110,10 @@ func (w *warmer) cacheConnection(req managementRequest) error {
 	w.mu.Unlock()
 	select {
 	case w.refreshWake <- struct{}{}:
+	default:
+	}
+	select {
+	case w.quotaWake <- struct{}{}:
 	default:
 	}
 	return nil

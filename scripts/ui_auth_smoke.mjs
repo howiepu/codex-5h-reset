@@ -20,7 +20,7 @@ for (const code of [401, 403, 200]) {
       if (code !== 200) throw Object.assign(new Error("denied"), {status: code});
       return {configuration: {}, accounts: [], logs: []};
     },
-    renderStatus() {}, fillConfig() {}, renderAccounts() {}, renderLogs() {}, schedulePoll() {},
+    renderStatus() {}, fillConfig() {}, fillQuotaConfig() {}, renderAccounts() {}, renderLogs() {}, schedulePoll() {},
     document: {querySelectorAll: () => []},
   });
   vm.runInContext(load, context);
@@ -54,6 +54,7 @@ for (const code of [401, 403]) {
   assert.equal(nodes.get("connection").open, true);
   assert.equal(nodes.get("settingsFields").disabled, true);
   assert.equal(nodes.get("tokenRefreshFields").disabled, true);
+  assert.equal(nodes.get("quotaFields").disabled, true);
   assert.equal(removed.length, code === 401 ? 2 : 0, "401 清除无效密钥，403 保留密钥并展示限制原因");
 }
 const connect = html.slice(html.indexOf("async function cacheCurrentConnection()"), html.indexOf('$("connectionForm").addEventListener'));

@@ -31,6 +31,7 @@ jobs:
           python3 scripts/check_ui.py
           node scripts/ui_auth_smoke.mjs
           node scripts/ui_settings_smoke.mjs
+          node scripts/ui_quota_smoke.mjs
       - name: Build and verify native ABI
         env:
           RELEASE_REF: ${{ github.ref }}

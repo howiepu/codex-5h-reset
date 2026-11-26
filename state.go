@@ -11,13 +11,14 @@ import (
 )
 
 type history struct {
-	SchemaVersion int             `json:"schema_version"`
-	LastRun       *time.Time      `json:"last_run,omitempty"`
-	LastSource    string          `json:"last_source,omitempty"`
-	LastResults   []result        `json:"last_results"`
-	LastProgress  *runProgress    `json:"last_progress,omitempty"`
-	Logs          []logEntry      `json:"logs"`
-	TokenRefresh  *refreshJournal `json:"token_refresh,omitempty"`
+	SchemaVersion int                    `json:"schema_version"`
+	LastRun       *time.Time             `json:"last_run,omitempty"`
+	LastSource    string                 `json:"last_source,omitempty"`
+	LastResults   []result               `json:"last_results"`
+	LastProgress  *runProgress           `json:"last_progress,omitempty"`
+	Logs          []logEntry             `json:"logs"`
+	TokenRefresh  *refreshJournal        `json:"token_refresh,omitempty"`
+	QuotaGuard    map[string]quotaRecord `json:"quota_guard,omitempty"`
 }
 
 func loadHistory(path string) (history, error) {

@@ -209,7 +209,7 @@ func (w *warmer) executeRun(cfg config, job *runJob) {
 			for j := i; j < len(job.results); j++ {
 				job.results[j].Status = "stopped"
 			}
-			job.progress.Skipped = len(auths) - i
+			job.progress.Skipped += len(auths) - i
 			w.mu.Unlock()
 			break
 		}
@@ -217,14 +217,17 @@ func (w *warmer) executeRun(cfg config, job *runJob) {
 		started := time.Now().UTC()
 		job.results[i].StartedAt = &started
 		w.mu.Unlock()
-		runLog("info", "warmup.credential_started", "开始执行账号请求", map[string]any{"auth_id": auth.ID, "label": auth.Label})
+		runLog("info", "warmup.credential_started", "开始处理账号", map[string]any{"auth_id": auth.ID, "label": auth.Label})
 		r := w.warmOne(cfg, auth)
 		w.mu.Lock()
 		job.results[i] = r
-		job.progress.Completed++
-		if r.Success {
+		if r.Status == "skipped" {
+			job.progress.Skipped++
+		} else if r.Success {
+			job.progress.Completed++
 			job.progress.Succeeded++
 		} else {
+			job.progress.Completed++
 			job.progress.Failed++
 		}
 		w.mu.Unlock()
@@ -232,7 +235,11 @@ func (w *warmer) executeRun(cfg config, job *runJob) {
 		if r.Success {
 			level, message = "info", "请求成功"
 		}
-		runLog(level, "warmup.credential", fmt.Sprintf("%s（HTTP %d，耗时 %d ms）", message, r.StatusCode, r.DurationMS), map[string]any{"auth_id": r.AuthID, "label": r.Label, "status_code": r.StatusCode, "success": r.Success, "duration_ms": r.DurationMS, "error_kind": r.ErrorKind})
+		message = fmt.Sprintf("%s（HTTP %d，耗时 %d ms）", message, r.StatusCode, r.DurationMS)
+		if r.Status == "skipped" {
+			level, message = "info", "额度保护跳过："+r.Error
+		}
+		runLog(level, "warmup.credential", message, map[string]any{"auth_id": r.AuthID, "label": r.Label, "status_code": r.StatusCode, "success": r.Success, "duration_ms": r.DurationMS, "error_kind": r.ErrorKind})
 	}
 	w.mu.Lock()
 	p := job.progress

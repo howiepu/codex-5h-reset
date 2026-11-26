@@ -22,27 +22,30 @@ const (
 var version = "0.1.6"
 
 type config struct {
-	Enabled               bool              `yaml:"enabled" json:"enabled"`
-	Model                 string            `yaml:"model" json:"model"`
-	Prompt                string            `yaml:"prompt" json:"prompt"`
-	RandomArithmetic      bool              `yaml:"random_arithmetic" json:"random_arithmetic"`
-	Timezone              string            `yaml:"timezone" json:"timezone"`
-	Schedules             []schedule        `yaml:"schedules" json:"schedules"`
-	MaxLogEntries         int               `yaml:"max_log_entries" json:"max_log_entries"`
-	StateFile             string            `yaml:"state_file" json:"state_file"`
-	HistoryRetentionDays  int               `yaml:"history_retention_days" json:"history_retention_days"`
-	TokenRefreshEnabled   bool              `yaml:"token_refresh_enabled" json:"token_refresh_enabled"`
-	TokenRefreshHours     float64           `yaml:"token_refresh_before_hours" json:"token_refresh_before_hours"`
-	TokenRefreshURL       string            `yaml:"-" json:"-"`
-	TokenRefreshKey       string            `yaml:"-" json:"-"`
-	NotifyWebhookURL      string            `yaml:"notify_webhook_url" json:"notify_webhook_url"`
-	NotifyWebhookMethod   string            `yaml:"notify_webhook_method" json:"notify_webhook_method"`
-	NotifyWebhookFormat   string            `yaml:"notify_webhook_format" json:"notify_webhook_format"`
-	NotifyWebhookHeaders  map[string]string `yaml:"notify_webhook_headers" json:"notify_webhook_headers"`
-	NotifyWebhookBody     string            `yaml:"notify_webhook_body" json:"notify_webhook_body"`
-	NotifyWebhookUsername string            `yaml:"notify_webhook_username,omitempty" json:"notify_webhook_username,omitempty"`
-	NotifyWebhookPassword string            `yaml:"notify_webhook_password,omitempty" json:"notify_webhook_password,omitempty"`
-	NotifyBarkURL         string            `yaml:"notify_bark_url" json:"notify_bark_url"`
+	Enabled               bool                 `yaml:"enabled" json:"enabled"`
+	Model                 string               `yaml:"model" json:"model"`
+	Prompt                string               `yaml:"prompt" json:"prompt"`
+	RandomArithmetic      bool                 `yaml:"random_arithmetic" json:"random_arithmetic"`
+	WarmupQuotaCheck      bool                 `yaml:"warmup_quota_check" json:"warmup_quota_check"`
+	QuotaGuardEnabled     bool                 `yaml:"quota_guard_enabled" json:"quota_guard_enabled"`
+	QuotaGuardAccounts    map[string]quotaRule `yaml:"quota_guard_accounts" json:"quota_guard_accounts"`
+	Timezone              string               `yaml:"timezone" json:"timezone"`
+	Schedules             []schedule           `yaml:"schedules" json:"schedules"`
+	MaxLogEntries         int                  `yaml:"max_log_entries" json:"max_log_entries"`
+	StateFile             string               `yaml:"state_file" json:"state_file"`
+	HistoryRetentionDays  int                  `yaml:"history_retention_days" json:"history_retention_days"`
+	TokenRefreshEnabled   bool                 `yaml:"token_refresh_enabled" json:"token_refresh_enabled"`
+	TokenRefreshHours     float64              `yaml:"token_refresh_before_hours" json:"token_refresh_before_hours"`
+	TokenRefreshURL       string               `yaml:"-" json:"-"`
+	TokenRefreshKey       string               `yaml:"-" json:"-"`
+	NotifyWebhookURL      string               `yaml:"notify_webhook_url" json:"notify_webhook_url"`
+	NotifyWebhookMethod   string               `yaml:"notify_webhook_method" json:"notify_webhook_method"`
+	NotifyWebhookFormat   string               `yaml:"notify_webhook_format" json:"notify_webhook_format"`
+	NotifyWebhookHeaders  map[string]string    `yaml:"notify_webhook_headers" json:"notify_webhook_headers"`
+	NotifyWebhookBody     string               `yaml:"notify_webhook_body" json:"notify_webhook_body"`
+	NotifyWebhookUsername string               `yaml:"notify_webhook_username,omitempty" json:"notify_webhook_username,omitempty"`
+	NotifyWebhookPassword string               `yaml:"notify_webhook_password,omitempty" json:"notify_webhook_password,omitempty"`
+	NotifyBarkURL         string               `yaml:"notify_bark_url" json:"notify_bark_url"`
 }
 
 type schedule struct {
@@ -62,6 +65,7 @@ func defaultConfig() config {
 		Model: "gpt-5.6-luna", Prompt: "Reply with exactly: quota window activated",
 		Timezone: "Asia/Singapore", MaxLogEntries: 200,
 		HistoryRetentionDays: 30,
+		WarmupQuotaCheck:     true,
 		TokenRefreshHours:    120,
 		NotifyWebhookMethod:  "POST", NotifyWebhookFormat: "json",
 		StateFile: filepath.Join("plugins", "data", pluginID, "history.json"),
@@ -90,6 +94,9 @@ func parseConfig(raw []byte) (config, error) {
 		return cfg, fmt.Errorf("history_retention_days 必须在 1 到 365 之间")
 	}
 	if err := validateTokenRefreshConfig(&cfg); err != nil {
+		return cfg, err
+	}
+	if err := validateQuotaRules(cfg.QuotaGuardAccounts); err != nil {
 		return cfg, err
 	}
 	if err := validateNotificationConfig(&cfg); err != nil {

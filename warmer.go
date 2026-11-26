@@ -43,6 +43,7 @@ type modelRequest struct {
 	Headers        http.Header `json:"headers"`
 	ForcedProvider string      `json:"forced_provider"`
 	AuthID         string      `json:"auth_id"`
+	CallerScope    string      `json:"caller_scope,omitempty"`
 }
 
 type modelResponse struct {
@@ -81,6 +82,7 @@ type status struct {
 	StateError    string          `json:"state_error,omitempty"`
 	ArchiveError  string          `json:"archive_error,omitempty"`
 	Connection    connectionState `json:"connection"`
+	QuotaGuard    quotaStatus     `json:"quota_guard"`
 }
 
 type warmer struct {
@@ -105,10 +107,16 @@ type warmer struct {
 	refreshDone   chan struct{}
 	refreshActive string
 	refreshWake   chan struct{}
+	quotaCancel   context.CancelFunc
+	quotaDone     chan struct{}
+	quotaWake     chan struct{}
+	quotaHold     string
+	quotaVerified map[string]bool
+	warmupScopes  map[string]string
 }
 
 func newWarmer(host hostFunc) *warmer {
-	return &warmer{host: host, cfg: defaultConfig(), history: history{SchemaVersion: 1}, refreshWake: make(chan struct{}, 1)}
+	return &warmer{host: host, cfg: defaultConfig(), history: history{SchemaVersion: 1}, refreshWake: make(chan struct{}, 1), quotaWake: make(chan struct{}, 1), quotaVerified: map[string]bool{}, warmupScopes: map[string]string{}}
 }
 
 func (w *warmer) Configure(cfg config) {
@@ -133,6 +141,8 @@ func (w *warmer) Configure(cfg config) {
 		w.history.TokenRefresh.Hold = ""
 	}
 	w.cfg, w.initialized, w.accepting = cfg, true, cfg.Enabled
+	w.quotaVerified = map[string]bool{}
+	w.quotaHold = ""
 	w.archiveDay = ""
 	w.trimLogsLocked()
 	if cfg.Enabled {
@@ -145,6 +155,12 @@ func (w *warmer) Configure(cfg config) {
 		w.refreshDone = make(chan struct{})
 	}
 	refreshDone := w.refreshDone
+	var quotaCtx context.Context
+	if cfg.Enabled && cfg.QuotaGuardEnabled {
+		quotaCtx, w.quotaCancel = context.WithCancel(context.Background())
+		w.quotaDone = make(chan struct{})
+	}
+	quotaDone := w.quotaDone
 	w.mu.Unlock()
 	w.log("info", "configuration.updated", "插件配置已加载", nil)
 	if cfg.Enabled {
@@ -152,6 +168,9 @@ func (w *warmer) Configure(cfg config) {
 	}
 	if refreshCtx != nil {
 		go w.tokenRefreshLoop(refreshCtx, cfg, refreshDone)
+	}
+	if quotaCtx != nil {
+		go w.quotaLoop(quotaCtx, cfg, quotaDone)
 	}
 }
 
@@ -169,11 +188,16 @@ func (w *warmer) stopLocked() {
 	}
 	stop, done := w.stop, w.done
 	cancelRefresh, refreshDone := w.refreshCancel, w.refreshDone
+	cancelQuota, quotaDone := w.quotaCancel, w.quotaDone
+	w.quotaCancel, w.quotaDone = nil, nil
 	w.refreshCancel, w.refreshDone = nil, nil
 	w.stop, w.done = nil, nil
 	w.mu.Unlock()
 	if cancelRefresh != nil {
 		cancelRefresh()
+	}
+	if cancelQuota != nil {
+		cancelQuota()
 	}
 	if stop != nil {
 		close(stop)
@@ -183,6 +207,9 @@ func (w *warmer) stopLocked() {
 	}
 	if refreshDone != nil {
 		<-refreshDone
+	}
+	if quotaDone != nil {
+		<-quotaDone
 	}
 	w.runs.Wait()
 }
@@ -241,6 +268,12 @@ func (w *warmer) warmOne(cfg config, auth authEntry) (r result) {
 		finished := time.Now().UTC()
 		r.FinishedAt, r.DurationMS = &finished, finished.Sub(started).Milliseconds()
 	}()
+	if cfg.WarmupQuotaCheck {
+		if reason := w.quotaReason(auth.ID, started); reason != "" {
+			r.Status, r.ErrorKind, r.Error = "skipped", "quota_guard", reason
+			return r
+		}
+	}
 	protocol := "openai"
 	headers := http.Header{"Content-Type": {"application/json"}}
 	payload := map[string]any{
@@ -261,6 +294,10 @@ func (w *warmer) warmOne(cfg config, auth authEntry) (r result) {
 	request := modelRequest{
 		EntryProtocol: protocol, ExitProtocol: protocol, Model: cfg.Model, Stream: false,
 		Body: body, Headers: headers, ForcedProvider: "codex", AuthID: auth.ID,
+	}
+	if !cfg.WarmupQuotaCheck {
+		request.CallerScope = w.allowWarmup(auth.ID)
+		defer w.finishWarmup(request.CallerScope)
 	}
 	var response modelResponse
 	if err := w.host("host.model.execute", request, &response); err != nil {
@@ -293,13 +330,14 @@ func (w *warmer) Status() status {
 	cfg.Schedules = append([]schedule{}, cfg.Schedules...)
 	h := w.history
 	h.TokenRefresh = nil
+	h.QuotaGuard = nil
 	h.LastResults = append([]result{}, h.LastResults...)
 	h.Logs = append([]logEntry{}, h.Logs...)
 	if h.LastProgress != nil {
 		p := *h.LastProgress
 		h.LastProgress = &p
 	}
-	return status{Plugin: pluginID, Version: version, Running: w.running, Configuration: cfg, Schedules: nextRuns(cfg, time.Now()), History: h, StateError: w.stateError, ArchiveError: w.archiveError, Connection: cachedConnectionState(cfg.StateFile)}
+	return status{Plugin: pluginID, Version: version, Running: w.running, Configuration: cfg, Schedules: nextRuns(cfg, time.Now()), History: h, StateError: w.stateError, ArchiveError: w.archiveError, Connection: cachedConnectionState(cfg.StateFile), QuotaGuard: w.quotaStatusLocked(time.Now())}
 }
 
 func (w *warmer) log(level, event, message string, fields map[string]any) {
